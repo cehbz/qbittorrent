@@ -241,29 +241,113 @@ func (c *Client) TorrentsExport(hash string) ([]byte, error) {
 	return c.doPostValues("/api/v2/torrents/export", params)
 }
 
-// TorrentsAdd adds a torrent to qBittorrent via Web API using multipart/form-data
-func (c *Client) TorrentsAdd(torrentFile string, fileData []byte) error {
+// TorrentsAddParams holds the parameters for adding a torrent
+type TorrentsAddParams struct {
+	Torrents    [][]byte // Raw torrent data
+	URLs        []string // Magnet links or URLs
+	SavePath    string   // Download folder
+	Cookie      string   // Cookie sent to download the .torrent file
+	Category    string   // Category for the torrent
+	Tags        string   // Tags for the torrent, comma separated
+	SkipCheck   bool     // Skip hash checking
+	Paused      bool     // Add torrents in the paused state
+	RootFolder  *bool    // Create the root folder (default: true)
+	Rename      string   // Rename torrent
+	UpLimit     int      // Set torrent upload speed limit (bytes/second)
+	DlLimit     int      // Set torrent download speed limit (bytes/second)
+	RatioLimit  float64  // Set torrent share ratio limit
+	SeedingTime int      // Set torrent seeding time limit (minutes)
+	AutoTMM     bool     // Whether Automatic Torrent Management should be used
+	Sequential  bool     // Enable sequential download
+	FirstLast   bool     // Prioritize download first last piece
+}
+
+// TorrentsAdd adds a torrent using a more flexible parameter structure
+func (c *Client) TorrentsAddParams(params *TorrentsAddParams) error {
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 
-	part, err := writer.CreateFormFile("torrents", torrentFile)
-	if err != nil {
-		return fmt.Errorf("CreateFormFile error: %v", err)
-	}
-	if _, err := io.Copy(part, bytes.NewReader(fileData)); err != nil {
-		return fmt.Errorf("io.Copy error: %v", err)
+	// Add torrent files
+	for i, torrentData := range params.Torrents {
+		part, err := writer.CreateFormFile("torrents", fmt.Sprintf("torrent%d.torrent", i))
+		if err != nil {
+			return fmt.Errorf("CreateFormFile error: %v", err)
+		}
+		if _, err := io.Copy(part, bytes.NewReader(torrentData)); err != nil {
+			return fmt.Errorf("io.Copy error: %v", err)
+		}
 	}
 
-	_ = writer.WriteField("skip_checking", "true") // Avoid recheck
-	_ = writer.WriteField("paused", "false")
-	_ = writer.WriteField("autoTMM", "false")
+	// Add URLs
+	for _, url := range params.URLs {
+		_ = writer.WriteField("urls", url)
+	}
+
+	// Add other fields
+	if params.SavePath != "" {
+		_ = writer.WriteField("savepath", params.SavePath)
+	}
+	if params.Cookie != "" {
+		_ = writer.WriteField("cookie", params.Cookie)
+	}
+	if params.Category != "" {
+		_ = writer.WriteField("category", params.Category)
+	}
+	if params.Tags != "" {
+		_ = writer.WriteField("tags", params.Tags)
+	}
+	if params.SkipCheck {
+		_ = writer.WriteField("skip_checking", "true")
+	}
+	if params.Paused {
+		_ = writer.WriteField("paused", "true")
+	}
+	if params.RootFolder != nil {
+		_ = writer.WriteField("root_folder", fmt.Sprintf("%t", *params.RootFolder))
+	}
+	if params.Rename != "" {
+		_ = writer.WriteField("rename", params.Rename)
+	}
+	if params.UpLimit > 0 {
+		_ = writer.WriteField("upLimit", strconv.Itoa(params.UpLimit))
+	}
+	if params.DlLimit > 0 {
+		_ = writer.WriteField("dlLimit", strconv.Itoa(params.DlLimit))
+	}
+	if params.RatioLimit > 0 {
+		_ = writer.WriteField("ratioLimit", fmt.Sprintf("%.2f", params.RatioLimit))
+	}
+	if params.SeedingTime > 0 {
+		_ = writer.WriteField("seedingTimeLimit", strconv.Itoa(params.SeedingTime))
+	}
+	if params.AutoTMM {
+		_ = writer.WriteField("autoTMM", "true")
+	}
+	if params.Sequential {
+		_ = writer.WriteField("sequentialDownload", "true")
+	}
+	if params.FirstLast {
+		_ = writer.WriteField("firstLastPiecePrio", "true")
+	}
+
 	writer.Close()
 
-	_, err = c.doPost("/api/v2/torrents/add", &body, writer.FormDataContentType())
+	_, err := c.doPost("/api/v2/torrents/add", &body, writer.FormDataContentType())
 	if err != nil {
 		return fmt.Errorf("TorrentsAdd error: %v", err)
 	}
 	return nil
+}
+
+// TorrentsAdd adds a torrent to qBittorrent via Web API using multipart/form-data
+func (c *Client) TorrentsAdd(torrentFile string, fileData []byte) error {
+	params := &TorrentsAddParams{
+		Torrents:  [][]byte{fileData},
+		SkipCheck: true,
+		Paused:    false,
+		AutoTMM:   false,
+	}
+	return c.TorrentsAddParams(params)
 }
 
 // TorrentsDelete deletes a torrent from qBittorrent by its hash

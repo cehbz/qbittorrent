@@ -16,6 +16,7 @@ type mockRoundTripper struct {
 	expectedRequests []expectedRequest
 	requestIndex     int
 	t                *testing.T
+	customHandler    map[string]func(*http.Request)
 }
 
 // mockResponse represents a mock HTTP response for a given endpoint
@@ -51,6 +52,11 @@ func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 		m.t.Errorf("Expected URL %s, got %s", expected.url, req.URL.Path)
 	}
 
+	// Call custom handler if present
+	if handler, ok := m.customHandler[req.URL.Path]; ok && handler != nil {
+		handler(req)
+	}
+
 	// Check query parameters if specified
 	if expected.query != nil {
 		if !reflect.DeepEqual(req.URL.Query(), expected.query) {
@@ -83,10 +89,16 @@ func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 
 // helper function to create a mock client with predefined endpoint responses and expected requests
 func newMockClient(responses map[string]mockResponse, expectedRequests []expectedRequest) (*Client, *mockRoundTripper, error) {
+	return newMockClientWithHandler(responses, expectedRequests, nil)
+}
+
+// helper function to create a mock client with predefined endpoint responses, expected requests, and custom handlers
+func newMockClientWithHandler(responses map[string]mockResponse, expectedRequests []expectedRequest, customHandler map[string]func(*http.Request)) (*Client, *mockRoundTripper, error) {
 	transport := &mockRoundTripper{
 		responses:        responses,
 		expectedRequests: expectedRequests,
 		t:                &testing.T{},
+		customHandler:    customHandler,
 	}
 
 	httpClient := &http.Client{Transport: transport}
