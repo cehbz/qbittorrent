@@ -262,7 +262,7 @@ type TorrentsAddParams struct {
 	FirstLast   bool     // Prioritize download first last piece
 }
 
-// TorrentsAdd adds a torrent using a more flexible parameter structure
+// TorrentsAddParams adds a torrent using a more flexible parameter structure
 func (c *Client) TorrentsAddParams(params *TorrentsAddParams) error {
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
@@ -678,6 +678,7 @@ func withQuery(query url.Values) func(*http.Request) error {
 	}
 }
 
+// SyncMainData retrieves the main data from qBittorrent for synchronization
 func (c *Client) SyncMainData(rid int) (*MainData, error) {
 	params := url.Values{}
 	params.Set("rid", strconv.Itoa(rid))
@@ -696,6 +697,7 @@ func (c *Client) SyncMainData(rid int) (*MainData, error) {
 	return &result, nil
 }
 
+// SyncTorrentPeers retrieves peer information for a specific torrent for synchronization
 func (c *Client) SyncTorrentPeers(hash string, rid int) (*TorrentPeers, error) {
 	params := url.Values{}
 	params.Set("rid", strconv.Itoa(rid))
