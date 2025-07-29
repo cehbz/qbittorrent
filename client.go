@@ -179,7 +179,7 @@ type TorrentPeers struct {
 
 // NewClient initializes a new qBittorrent client.
 // If httpClient is nil, http.DefaultClient is used.
-func NewClient(username, password, addr, port string, httpClient ...*http.Client) (*Client, error) {
+func NewClient(username, password, baseURL string, httpClient ...*http.Client) (*Client, error) {
 	// Use the provided http.Client if given, otherwise use http.DefaultClient
 	client := http.DefaultClient
 	if len(httpClient) > 0 && httpClient[0] != nil {
@@ -191,7 +191,7 @@ func NewClient(username, password, addr, port string, httpClient ...*http.Client
 		username: username,
 		password: password,
 		client:   client,
-		baseURL:  fmt.Sprintf("http://%s:%s", addr, port),
+		baseURL:  baseURL,
 	}
 
 	// Authenticate if username and password are provided

@@ -21,7 +21,7 @@ func TestNewClientWithoutAuth(t *testing.T) {
 		Transport: mockTransport,
 	}
 
-	client, err := NewClient("", "", "localhost", "8080", httpClient)
+	client, err := NewClient("", "", "http://localhost:8080", httpClient)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -49,7 +49,7 @@ func TestNewClientWithAuth(t *testing.T) {
 		Transport: mockTransport,
 	}
 
-	client, err := NewClient("testuser", "testpass", "localhost", "8080", httpClient)
+	client, err := NewClient("testuser", "testpass", "http://localhost:8080", httpClient)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -85,7 +85,7 @@ func TestAuthLogin(t *testing.T) {
 		Transport: mockTransport,
 	}
 
-	client, err := NewClient("testuser", "testpass", "localhost", "8080", httpClient)
+	client, err := NewClient("testuser", "testpass", "http://localhost:8080", httpClient)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -119,7 +119,7 @@ func TestAuthLogin_Failure(t *testing.T) {
 		Transport: mockTransport,
 	}
 
-	client, err := NewClient("testuser", "testpass", "localhost", "8080", httpClient)
+	client, err := NewClient("testuser", "testpass", "http://localhost:8080", httpClient)
 	if err == nil || client != nil {
 		t.Fatalf("Expected error during NewClient creation, got client: %v, error: %v", client, err)
 	}

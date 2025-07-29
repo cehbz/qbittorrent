@@ -102,6 +102,6 @@ func newMockClientWithHandler(responses map[string]mockResponse, expectedRequest
 	}
 
 	httpClient := &http.Client{Transport: transport}
-	client, err := NewClient("user", "pass", "localhost", "8080", httpClient)
+	client, err := NewClient("user", "pass", "http://localhost:8080", httpClient)
 	return client, transport, err
 }
