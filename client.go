@@ -75,6 +75,44 @@ type TorrentInfo struct {
 	UpSpeed            int64    `json:"upspeed"`
 }
 
+// TorrentProperties represents generic properties for a torrent.
+type TorrentProperties struct {
+	SavePath               string  `json:"save_path"`
+	CreationDate           int64   `json:"creation_date"`
+	PieceSize              int64   `json:"piece_size"`
+	Comment                string  `json:"comment"`
+	TotalWasted            int64   `json:"total_wasted"`
+	TotalUploaded          int64   `json:"total_uploaded"`
+	TotalUploadedSession   int64   `json:"total_uploaded_session"`
+	TotalDownloaded        int64   `json:"total_downloaded"`
+	TotalDownloadedSession int64   `json:"total_downloaded_session"`
+	UpLimit                int64   `json:"up_limit"`
+	DLLimit                int64   `json:"dl_limit"`
+	TimeElapsed            int64   `json:"time_elapsed"`
+	SeedingTime            int64   `json:"seeding_time"`
+	NbConnections          int64   `json:"nb_connections"`
+	NbConnectionsLimit     int64   `json:"nb_connections_limit"`
+	ShareRatio             float64 `json:"share_ratio"`
+	AdditionDate           int64   `json:"addition_date"`
+	CompletionDate         int64   `json:"completion_date"`
+	CreatedBy              string  `json:"created_by"`
+	DLSpeedAvg             int64   `json:"dl_speed_avg"`
+	DLSpeed                int64   `json:"dl_speed"`
+	ETA                    int64   `json:"eta"`
+	LastSeen               int64   `json:"last_seen"`
+	Peers                  int64   `json:"peers"`
+	PeersTotal             int64   `json:"peers_total"`
+	PiecesHave             int64   `json:"pieces_have"`
+	PiecesNum              int64   `json:"pieces_num"`
+	Reannounce             int64   `json:"reannounce"`
+	Seeds                  int64   `json:"seeds"`
+	SeedsTotal             int64   `json:"seeds_total"`
+	TotalSize              int64   `json:"total_size"`
+	UpSpeedAvg             int64   `json:"up_speed_avg"`
+	UpSpeed                int64   `json:"up_speed"`
+	IsPrivate              bool    `json:"isPrivate"`
+}
+
 // UnmarshalJSON custom unmarshaller for TorrentInfo to handle Tags
 func (t *TorrentInfo) UnmarshalJSON(data []byte) error {
 	type Alias TorrentInfo
@@ -453,6 +491,27 @@ func (c *Client) TorrentsTrackers(hash string) ([]TrackerInfo, error) {
 	}
 
 	return trackers, nil
+}
+
+// TorrentProperties retrieves the generic properties for a given torrent hash.
+func (c *Client) TorrentProperties(hash string) (*TorrentProperties, error) {
+	params := url.Values{}
+	params.Set("hash", hash)
+
+	respData, err := c.doGet("/api/v2/torrents/properties", params)
+	if err != nil {
+		return nil, fmt.Errorf("TorrentProperties error: %v", err)
+	}
+	if len(respData) == 0 {
+		return nil, fmt.Errorf("TorrentProperties error: empty response")
+	}
+
+	var props TorrentProperties
+	if err := json.Unmarshal(respData, &props); err != nil {
+		return nil, fmt.Errorf("failed to decode properties response: %v", err)
+	}
+
+	return &props, nil
 }
 
 // TorrentsAddTags adds tags to the specified torrents

@@ -11,6 +11,7 @@ A Go client library for interacting with the [qBittorrent](https://www.qbittorre
   - Export torrent files.
   - Download torrent files.
   - Retrieve torrent information.
+  - Retrieve torrent generic properties.
   - Manage torrent force-start settings.
 - **Tracker Information**: Fetch tracker details for specific torrents.
 - **Tag Management**: Create, delete, add, and remove tags from torrents.
@@ -143,6 +144,17 @@ filteredTorrents, err := client.TorrentsInfo(params)
 if err != nil {
     log.Fatalf("Failed to retrieve filtered torrents: %v", err)
 }
+```
+
+### Retrieving Torrent Generic Properties
+
+```go
+props, err := client.TorrentProperties("torrent-hash")
+if err != nil {
+    log.Fatalf("Failed to retrieve torrent properties: %v", err)
+}
+
+fmt.Printf("Save path: %s, Total size: %d\n", props.SavePath, props.TotalSize)
 ```
 
 ### Managing Torrent Force Start
