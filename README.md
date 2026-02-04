@@ -149,7 +149,7 @@ if err != nil {
 ### Retrieving Torrent Generic Properties
 
 ```go
-props, err := client.TorrentProperties("torrent-hash")
+props, err := client.TorrentsProperties("torrent-hash")
 if err != nil {
     log.Fatalf("Failed to retrieve torrent properties: %v", err)
 }

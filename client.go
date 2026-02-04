@@ -75,8 +75,8 @@ type TorrentInfo struct {
 	UpSpeed            int64    `json:"upspeed"`
 }
 
-// TorrentProperties represents generic properties for a torrent.
-type TorrentProperties struct {
+// TorrentsProperties represents generic properties for a torrent.
+type TorrentsProperties struct {
 	SavePath               string  `json:"save_path"`
 	CreationDate           int64   `json:"creation_date"`
 	PieceSize              int64   `json:"piece_size"`
@@ -493,20 +493,20 @@ func (c *Client) TorrentsTrackers(hash string) ([]TrackerInfo, error) {
 	return trackers, nil
 }
 
-// TorrentProperties retrieves the generic properties for a given torrent hash.
-func (c *Client) TorrentProperties(hash string) (*TorrentProperties, error) {
+// TorrentsProperties retrieves the generic properties for a given torrent hash.
+func (c *Client) TorrentsProperties(hash string) (*TorrentsProperties, error) {
 	params := url.Values{}
 	params.Set("hash", hash)
 
 	respData, err := c.doGet("/api/v2/torrents/properties", params)
 	if err != nil {
-		return nil, fmt.Errorf("TorrentProperties error: %v", err)
+		return nil, fmt.Errorf("TorrentsProperties error: %v", err)
 	}
 	if len(respData) == 0 {
-		return nil, fmt.Errorf("TorrentProperties error: empty response")
+		return nil, fmt.Errorf("TorrentsProperties error: empty response")
 	}
 
-	var props TorrentProperties
+	var props TorrentsProperties
 	if err := json.Unmarshal(respData, &props); err != nil {
 		return nil, fmt.Errorf("failed to decode properties response: %v", err)
 	}

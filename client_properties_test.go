@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestTorrentProperties(t *testing.T) {
+func TestTorrentsProperties(t *testing.T) {
 	tests := []struct {
 		name           string
 		responseBody   string
@@ -50,7 +50,7 @@ func TestTorrentProperties(t *testing.T) {
 				t.Fatalf("Expected no error, got %v", err)
 			}
 
-			props, err := client.TorrentProperties("testhash")
+			props, err := client.TorrentsProperties("testhash")
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("Expected error, got nil")
@@ -71,7 +71,7 @@ func TestTorrentProperties(t *testing.T) {
 	}
 }
 
-func TestIntegration_TorrentProperties(t *testing.T) {
+func TestIntegration_TorrentsProperties(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v2/torrents/properties" {
 			w.WriteHeader(http.StatusNotFound)
@@ -91,7 +91,7 @@ func TestIntegration_TorrentProperties(t *testing.T) {
 		baseURL: ts.URL,
 	}
 
-	props, err := client.TorrentProperties("testhash")
+	props, err := client.TorrentsProperties("testhash")
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
