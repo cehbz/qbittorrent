@@ -146,7 +146,7 @@ type TorrentsProperties struct {
 	PiecesHave             int64   `json:"pieces_have"`
 	PieceSize              int64   `json:"piece_size"`
 	PiecesNum              int64   `json:"pieces_num"`
-	Popularity             int64   `json:"popularity"`
+	Popularity             float64 `json:"popularity"`
 	Private                bool    `json:"private"`
 	Reannounce             int64   `json:"reannounce"`
 	SavePath               string  `json:"save_path"`
