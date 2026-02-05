@@ -157,6 +157,8 @@ if err != nil {
 fmt.Printf("Save path: %s, Total size: %d\n", props.SavePath, props.TotalSize)
 ```
 
+`TorrentsProperties` timestamp fields (`AdditionDate`, `CreationDate`, `CompletionDate`, `LastSeen`) are returned as `time.Time` values parsed from Unix seconds.
+
 ### Managing Torrent Force Start
 
 ```go

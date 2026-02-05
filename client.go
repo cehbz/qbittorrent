@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type InfoHash string
@@ -76,41 +77,127 @@ type TorrentInfo struct {
 }
 
 // TorrentsProperties represents generic properties for a torrent.
+/*
+  "addition_date": 1770257484,
+  "comment": "https://redacted.sh/torrents.php?torrentid=664915",
+  "completion_date": 1770257488,
+  "created_by": "Transmission/2.84 (14306)",
+  "creation_date": 1483593698,
+  "dl_limit": -1,
+  "dl_speed": 0,
+  "dl_speed_avg": 100351515,
+  "download_path": "",
+  "eta": 8640000,
+  "has_metadata": true,
+  "hash": "5a0ff0482cb309913568bee1db6d68f7e5ef1f6d",
+  "infohash_v1": "5a0ff0482cb309913568bee1db6d68f7e5ef1f6d",
+  "infohash_v2": "",
+  "is_private": true,
+  "last_seen": 1770257488,
+  "name": "Jesca Hoop - Hunting My Dress (2010 Deluxe Edition) [FLAC]",
+  "nb_connections": 0,
+  "nb_connections_limit": -1,
+  "peers": 0,
+  "peers_total": 0,
+  "piece_size": 262144,
+  "pieces_have": 1531,
+  "pieces_num": 1531,
+  "popularity": 0,
+  "private": true,
+  "reannounce": 1434,
+  "save_path": "/home/haynes/torrents/qbittorrent/music",
+  "seeding_time": 6698,
+  "seeds": 0,
+  "seeds_total": 11,
+  "share_ratio": 0,
+  "time_elapsed": 6702,
+  "total_downloaded": 401406062,
+  "total_downloaded_session": 401406062,
+  "total_size": 401085347,
+  "total_uploaded": 0,
+  "total_uploaded_session": 0,
+  "total_wasted": 320715,
+  "up_limit": -1,
+  "up_speed": 0,
+  "up_speed_avg": 0
+*/
 type TorrentsProperties struct {
-	SavePath               string  `json:"save_path"`
-	CreationDate           int64   `json:"creation_date"`
-	PieceSize              int64   `json:"piece_size"`
-	Comment                string  `json:"comment"`
-	TotalWasted            int64   `json:"total_wasted"`
-	TotalUploaded          int64   `json:"total_uploaded"`
-	TotalUploadedSession   int64   `json:"total_uploaded_session"`
-	TotalDownloaded        int64   `json:"total_downloaded"`
-	TotalDownloadedSession int64   `json:"total_downloaded_session"`
-	UpLimit                int64   `json:"up_limit"`
-	DLLimit                int64   `json:"dl_limit"`
-	TimeElapsed            int64   `json:"time_elapsed"`
-	SeedingTime            int64   `json:"seeding_time"`
+	AdditionDate           time.Time
+	Comment                string `json:"comment"`
+	CompletionDate         time.Time
+	CreatedBy              string `json:"created_by"`
+	CreationDate           time.Time
+	DLLimit                int64    `json:"dl_limit"`
+	DLSpeed                int64    `json:"dl_speed"`
+	DLSpeedAvg             int64    `json:"dl_speed_avg"`
+	DownloadPath           string   `json:"download_path"`
+	ETA                    int64    `json:"eta"`
+	HasMetadata            bool     `json:"has_metadata"`
+	Hash                   InfoHash `json:"hash"`
+	InfoHashV1             InfoHash `json:"infohash_v1"`
+	InfoHashV2             InfoHash `json:"infohash_v2"`
+	IsPrivate              bool     `json:"isPrivate"`
+	LastSeen               time.Time
+	Name                   string  `json:"name"`
 	NbConnections          int64   `json:"nb_connections"`
 	NbConnectionsLimit     int64   `json:"nb_connections_limit"`
-	ShareRatio             float64 `json:"share_ratio"`
-	AdditionDate           int64   `json:"addition_date"`
-	CompletionDate         int64   `json:"completion_date"`
-	CreatedBy              string  `json:"created_by"`
-	DLSpeedAvg             int64   `json:"dl_speed_avg"`
-	DLSpeed                int64   `json:"dl_speed"`
-	ETA                    int64   `json:"eta"`
-	LastSeen               int64   `json:"last_seen"`
 	Peers                  int64   `json:"peers"`
 	PeersTotal             int64   `json:"peers_total"`
 	PiecesHave             int64   `json:"pieces_have"`
+	PieceSize              int64   `json:"piece_size"`
 	PiecesNum              int64   `json:"pieces_num"`
+	Popularity             int64   `json:"popularity"`
+	Private                bool    `json:"private"`
 	Reannounce             int64   `json:"reannounce"`
+	SavePath               string  `json:"save_path"`
+	SeedingTime            int64   `json:"seeding_time"`
 	Seeds                  int64   `json:"seeds"`
 	SeedsTotal             int64   `json:"seeds_total"`
+	ShareRatio             float64 `json:"share_ratio"`
+	TimeElapsed            int64   `json:"time_elapsed"`
+	TotalDownloaded        int64   `json:"total_downloaded"`
+	TotalDownloadedSession int64   `json:"total_downloaded_session"`
 	TotalSize              int64   `json:"total_size"`
-	UpSpeedAvg             int64   `json:"up_speed_avg"`
+	TotalUploaded          int64   `json:"total_uploaded"`
+	TotalUploadedSession   int64   `json:"total_uploaded_session"`
+	TotalWasted            int64   `json:"total_wasted"`
+	UpLimit                int64   `json:"up_limit"`
 	UpSpeed                int64   `json:"up_speed"`
-	IsPrivate              bool    `json:"isPrivate"`
+	UpSpeedAvg             int64   `json:"up_speed_avg"`
+}
+
+// TODO: Apply alias-based timestamp parsing to other structs.
+
+// UnmarshalJSON custom unmarshaller for TorrentsProperties to handle timestamps.
+func (t *TorrentsProperties) UnmarshalJSON(data []byte) error {
+	type Alias TorrentsProperties
+	aux := &struct {
+		AdditionDate   int64 `json:"addition_date"`
+		CompletionDate int64 `json:"completion_date"`
+		CreationDate   int64 `json:"creation_date"`
+		LastSeen       int64 `json:"last_seen"`
+		*Alias
+	}{
+		Alias: (*Alias)(t),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	t.AdditionDate = unixTimeOrZero(aux.AdditionDate)
+	t.CompletionDate = unixTimeOrZero(aux.CompletionDate)
+	t.CreationDate = unixTimeOrZero(aux.CreationDate)
+	t.LastSeen = unixTimeOrZero(aux.LastSeen)
+
+	return nil
+}
+
+func unixTimeOrZero(value int64) time.Time {
+	if value == -1 {
+		return time.Time{}
+	}
+	return time.Unix(value, 0)
 }
 
 // UnmarshalJSON custom unmarshaller for TorrentInfo to handle Tags

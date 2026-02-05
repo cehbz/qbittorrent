@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 )
 
 func TestTorrentsProperties(t *testing.T) {
@@ -13,12 +14,22 @@ func TestTorrentsProperties(t *testing.T) {
 		responseBody   string
 		wantErr        bool
 		expectSavePath string
+		expectCreation time.Time
+		expectZeroTime bool
 	}{
 		{
 			name:           "Success",
-			responseBody:   `{"save_path":"/downloads","piece_size":524288,"total_size":1024}`,
+			responseBody:   `{"save_path":"/downloads","piece_size":524288,"total_size":1024,"creation_date":1700000000}`,
 			wantErr:        false,
 			expectSavePath: "/downloads",
+			expectCreation: time.Unix(1700000000, 0),
+		},
+		{
+			name:           "Unknown creation date",
+			responseBody:   `{"save_path":"/downloads","creation_date":-1}`,
+			wantErr:        false,
+			expectSavePath: "/downloads",
+			expectZeroTime: true,
 		},
 		{
 			name:         "Empty response",
@@ -63,6 +74,13 @@ func TestTorrentsProperties(t *testing.T) {
 			if props.SavePath != tt.expectSavePath {
 				t.Fatalf("Expected save path %q, got %q", tt.expectSavePath, props.SavePath)
 			}
+			if tt.expectZeroTime {
+				if !props.CreationDate.IsZero() {
+					t.Fatalf("Expected zero creation date, got %v", props.CreationDate)
+				}
+			} else if !props.CreationDate.Equal(tt.expectCreation) {
+				t.Fatalf("Expected creation date %v, got %v", tt.expectCreation, props.CreationDate)
+			}
 
 			if mockTransport.requestIndex != len(mockTransport.expectedRequests) {
 				t.Errorf("Not all expected requests were made")
@@ -82,7 +100,7 @@ func TestIntegration_TorrentsProperties(t *testing.T) {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"save_path":"/downloads","total_size":1024}`))
+		w.Write([]byte(`{"save_path":"/downloads","total_size":1024,"creation_date":1700000000}`))
 	}))
 	defer ts.Close()
 
@@ -100,5 +118,8 @@ func TestIntegration_TorrentsProperties(t *testing.T) {
 	}
 	if props.TotalSize != 1024 {
 		t.Fatalf("Expected total size 1024, got %d", props.TotalSize)
+	}
+	if !props.CreationDate.Equal(time.Unix(1700000000, 0)) {
+		t.Fatalf("Expected creation date %v, got %v", time.Unix(1700000000, 0), props.CreationDate)
 	}
 }
