@@ -80,10 +80,18 @@ func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 		m.responses[req.URL.Path] = *resp.then
 	}
 
+	header := make(http.Header)
+
+	// Set SID cookie for login endpoint to support cookie jar
+	if req.URL.Path == "/api/v2/auth/login" && resp.statusCode == http.StatusOK {
+		header.Set("Set-Cookie", "SID=test-session-id; Path=/")
+	}
+
 	return &http.Response{
 		StatusCode: resp.statusCode,
 		Body:       io.NopCloser(strings.NewReader(resp.responseBody)),
-		Header:     make(http.Header),
+		Header:     header,
+		Request:    req, // Required for cookie jar to work
 	}, nil
 }
 

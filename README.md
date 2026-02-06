@@ -5,6 +5,7 @@ A Go client library for interacting with the [qBittorrent](https://www.qbittorre
 ## Features
 
 - **Authentication**: Log in to the qBittorrent Web API.
+- **Context Support**: All methods now have context-aware versions (`*Ctx`) for timeout and cancellation control.
 - **Torrent Management**:
   - Add new torrents (with flexible parameters).
   - Delete existing torrents.
@@ -38,7 +39,7 @@ import (
 ### Initializing the Client
 
 ```go
-client, err := qbittorrent.NewClient("username", "password", "localhost", "8080")
+client, err := qbittorrent.NewClient("username", "password", "http://localhost:8080", nil)
 if err != nil {
     log.Fatalf("Failed to create client: %v", err)
 }
@@ -46,8 +47,32 @@ if err != nil {
 
 - `username`: Your qBittorrent Web UI username. Empty if none.
 - `password`: Your qBittorrent Web UI password. Empty if none.
-- `addr`: The address where qBittorrent is running (e.g., `"127.0.0.1"`).
-- `port`: The port number of the qBittorrent Web UI (e.g., `"8080"`).
+- `baseURL`: The full URL where qBittorrent is running (e.g., `"http://127.0.0.1:8080"`).
+- `httpClient`: Optional custom `*http.Client`. Pass `nil` to use `http.DefaultClient`.
+
+### Using Context for Timeout and Cancellation
+
+All API methods now have context-aware versions (suffixed with `Ctx`) for better control over request lifecycles:
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+defer cancel()
+
+// Use context-aware methods
+torrents, err := client.TorrentsInfoCtx(ctx)
+if err != nil {
+    log.Fatalf("Failed to retrieve torrents: %v", err)
+}
+```
+
+**Benefits of Context-Aware Methods:**
+- **Timeout Control**: Prevent operations from running indefinitely
+- **Cancellation**: Cancel long-running operations when needed
+- **Request Tracing**: Integrate with distributed tracing systems
+- **Graceful Shutdown**: Clean up resources during application shutdown
+
+**Backward Compatibility:**
+All original methods (without `Ctx` suffix) remain available and internally use `context.Background()`.
 
 ### Adding a Torrent
 
@@ -64,8 +89,25 @@ if err != nil {
 }
 ```
 
+#### With Context (Recommended)
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+defer cancel()
+
+torrentData, err := os.ReadFile("path/to/your.torrent")
+if err != nil {
+    log.Fatalf("Failed to read torrent file: %v", err)
+}
+
+err = client.TorrentsAddCtx(ctx, "your.torrent", torrentData)
+if err != nil {
+    log.Fatalf("Failed to add torrent: %v", err)
+}
+```
+
 #### Advanced Method with Parameters
 ```go
+ctx := context.Background()
 params := &qbittorrent.TorrentsAddParams{
     Torrents:  [][]byte{torrentData},
     SavePath:  "/downloads/movies",
@@ -76,7 +118,7 @@ params := &qbittorrent.TorrentsAddParams{
     AutoTMM:   true,
 }
 
-err = client.TorrentsAddParams(params)
+err = client.TorrentsAddParamsCtx(ctx, params)
 if err != nil {
     log.Fatalf("Failed to add torrent: %v", err)
 }
@@ -122,8 +164,9 @@ if err != nil {
 ### Retrieving Torrent Information
 
 ```go
-// Get all torrents
-torrents, err := client.TorrentsInfo()
+// Get all torrents (with context recommended)
+ctx := context.Background()
+torrents, err := client.TorrentsInfoCtx(ctx)
 if err != nil {
     log.Fatalf("Failed to retrieve torrents info: %v", err)
 }
@@ -140,7 +183,7 @@ params := &qbittorrent.TorrentsInfoParams{
     Limit:    10,
 }
 
-filteredTorrents, err := client.TorrentsInfo(params)
+filteredTorrents, err := client.TorrentsInfoCtx(ctx, params)
 if err != nil {
     log.Fatalf("Failed to retrieve filtered torrents: %v", err)
 }
@@ -239,6 +282,60 @@ if err != nil {
     log.Fatalf("Failed to get peer data: %v", err)
 }
 ```
+
+## API Reference
+
+### Context-Aware Methods
+
+All public API methods now have context-aware versions for production use:
+
+| Original Method | Context-Aware Version | Description |
+|----------------|----------------------|-------------|
+| `AuthLogin()` | `AuthLoginCtx(ctx)` | Authenticate with qBittorrent |
+| `TorrentsInfo()` | `TorrentsInfoCtx(ctx, params...)` | Get torrent information |
+| `TorrentsAdd()` | `TorrentsAddCtx(ctx, file, data)` | Add a torrent |
+| `TorrentsAddParams()` | `TorrentsAddParamsCtx(ctx, params)` | Add torrent with parameters |
+| `TorrentsDelete()` | `TorrentsDeleteCtx(ctx, hash)` | Delete a torrent |
+| `TorrentsExport()` | `TorrentsExportCtx(ctx, hash)` | Export torrent file |
+| `TorrentsDownload()` | `TorrentsDownloadCtx(ctx, hash)` | Download torrent file |
+| `TorrentsProperties()` | `TorrentsPropertiesCtx(ctx, hash)` | Get torrent properties |
+| `TorrentsTrackers()` | `TorrentsTrackersCtx(ctx, hash)` | Get torrent trackers |
+| `SetForceStart()` | `SetForceStartCtx(ctx, hash, value)` | Set force start |
+| `TorrentsAddTags()` | `TorrentsAddTagsCtx(ctx, hashes, tags)` | Add tags to torrents |
+| `TorrentsRemoveTags()` | `TorrentsRemoveTagsCtx(ctx, hashes, tags)` | Remove tags from torrents |
+| `TorrentsGetTags()` | `TorrentsGetTagsCtx(ctx, hashes)` | Get torrent tags |
+| `TorrentsGetAllTags()` | `TorrentsGetAllTagsCtx(ctx)` | Get all available tags |
+| `TorrentsCreateTags()` | `TorrentsCreateTagsCtx(ctx, tags)` | Create new tags |
+| `TorrentsDeleteTags()` | `TorrentsDeleteTagsCtx(ctx, tags)` | Delete tags |
+| `SyncMainData()` | `SyncMainDataCtx(ctx, rid)` | Sync main data |
+| `SyncTorrentPeers()` | `SyncTorrentPeersCtx(ctx, hash, rid)` | Sync torrent peers |
+
+### Best Practices
+
+1. **Always use context-aware methods in production** to enable timeouts and cancellation
+2. **Set appropriate timeouts** based on operation type:
+   - Quick operations (info, properties): 5-10 seconds
+   - File uploads/downloads: 30-60 seconds
+   - Long-running operations: Use context with cancellation support
+3. **Handle context errors appropriately**:
+   ```go
+   if err == context.DeadlineExceeded {
+       // Handle timeout
+   } else if err == context.Canceled {
+       // Handle cancellation
+   }
+   ```
+4. **Use context for graceful shutdown**:
+   ```go
+   ctx, cancel := context.WithCancel(context.Background())
+   defer cancel()
+
+   // On shutdown signal
+   go func() {
+       <-shutdownSignal
+       cancel() // This will cancel all in-flight requests
+   }()
+   ```
 
 ## License
 
