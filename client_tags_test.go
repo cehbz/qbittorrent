@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestTorrentInfo_UnmarshalJSON(t *testing.T) {
@@ -53,6 +54,80 @@ func TestTorrentInfo_UnmarshalJSON(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestTorrentInfo_UnmarshalJSON_Timestamps(t *testing.T) {
+	tests := []struct {
+		name             string
+		jsonData         string
+		expectAddedOn    time.Time
+		expectCompletion time.Time
+		expectActivity   time.Time
+		expectSeen       time.Time
+	}{
+		{
+			name:             "Valid timestamps",
+			jsonData:         `{"added_on":1700000000,"completion_on":1700001000,"last_activity":1700002000,"seen_complete":1700003000,"tags":""}`,
+			expectAddedOn:    time.Unix(1700000000, 0),
+			expectCompletion: time.Unix(1700001000, 0),
+			expectActivity:   time.Unix(1700002000, 0),
+			expectSeen:       time.Unix(1700003000, 0),
+		},
+		{
+			name:             "Unknown timestamps (-1)",
+			jsonData:         `{"added_on":1700000000,"completion_on":-1,"last_activity":1700002000,"seen_complete":-1,"tags":""}`,
+			expectAddedOn:    time.Unix(1700000000, 0),
+			expectCompletion: time.Time{},
+			expectActivity:   time.Unix(1700002000, 0),
+			expectSeen:       time.Time{},
+		},
+		{
+			name:             "Zero timestamps",
+			jsonData:         `{"added_on":0,"completion_on":0,"last_activity":0,"seen_complete":0,"tags":""}`,
+			expectAddedOn:    time.Unix(0, 0),
+			expectCompletion: time.Unix(0, 0),
+			expectActivity:   time.Unix(0, 0),
+			expectSeen:       time.Unix(0, 0),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var info TorrentInfo
+			if err := json.Unmarshal([]byte(tt.jsonData), &info); err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			if !info.AddedOn.Equal(tt.expectAddedOn) {
+				t.Errorf("AddedOn: expected %v, got %v", tt.expectAddedOn, info.AddedOn)
+			}
+			if !info.CompletionOn.Equal(tt.expectCompletion) {
+				t.Errorf("CompletionOn: expected %v, got %v", tt.expectCompletion, info.CompletionOn)
+			}
+			if !info.LastActivity.Equal(tt.expectActivity) {
+				t.Errorf("LastActivity: expected %v, got %v", tt.expectActivity, info.LastActivity)
+			}
+			if !info.SeenComplete.Equal(tt.expectSeen) {
+				t.Errorf("SeenComplete: expected %v, got %v", tt.expectSeen, info.SeenComplete)
+			}
+		})
+	}
+}
+
+func TestTorrentInfo_UnmarshalJSON_TagsAndTimestamps(t *testing.T) {
+	jsonData := `{"tags":"tag1, tag2","added_on":1700000000,"completion_on":1700001000,"last_activity":1700002000,"seen_complete":-1}`
+	var info TorrentInfo
+	if err := json.Unmarshal([]byte(jsonData), &info); err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(info.Tags) != 2 || info.Tags[0] != "tag1" || info.Tags[1] != "tag2" {
+		t.Errorf("expected [tag1 tag2], got %v", info.Tags)
+	}
+	if !info.AddedOn.Equal(time.Unix(1700000000, 0)) {
+		t.Errorf("AddedOn: expected %v, got %v", time.Unix(1700000000, 0), info.AddedOn)
+	}
+	if !info.SeenComplete.IsZero() {
+		t.Errorf("SeenComplete: expected zero, got %v", info.SeenComplete)
 	}
 }
 

@@ -7,10 +7,10 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -27,8 +27,6 @@ type Client struct {
 	password string
 	client   *http.Client
 	baseURL  string
-	sid      string // store the SID cookie
-	mu       sync.RWMutex
 }
 
 // TorrentInfo represents the structured information of a torrent from the qBittorrent API.
@@ -42,14 +40,14 @@ type Client struct {
 // nullable when metadata is unavailable). The old "isPrivate" key is no longer sent
 // by this endpoint.
 type TorrentInfo struct {
-	AddedOn                   int64    `json:"added_on"`
+	AddedOn                   time.Time
 	AmountLeft                int64    `json:"amount_left"`
 	AutoTMM                   bool     `json:"auto_tmm"`
 	Availability              float64  `json:"availability"`
 	Category                  string   `json:"category"`
 	Comment                   string   `json:"comment"`                    // undocumented
 	Completed                 int64    `json:"completed"`
-	CompletionOn              int64    `json:"completion_on"`
+	CompletionOn              time.Time
 	ContentPath               string   `json:"content_path"`
 	DownloadPath              string   `json:"download_path"`              // undocumented
 	DLLimit                   int64    `json:"dl_limit"`
@@ -64,7 +62,7 @@ type TorrentInfo struct {
 	InactiveSeedingTimeLimit  int64    `json:"inactive_seeding_time_limit"` // undocumented
 	InfoHashV1                InfoHash `json:"infohash_v1"`               // undocumented
 	InfoHashV2                InfoHash `json:"infohash_v2"`               // undocumented
-	LastActivity              int64    `json:"last_activity"`
+	LastActivity              time.Time
 	MagnetURI                 string   `json:"magnet_uri"`
 	MaxInactiveSeedingTime    int64    `json:"max_inactive_seeding_time"` // undocumented
 	MaxRatio                  float64  `json:"max_ratio"`
@@ -85,7 +83,7 @@ type TorrentInfo struct {
 	SavePath                  string   `json:"save_path"`
 	SeedingTime               int64    `json:"seeding_time"`
 	SeedingTimeLimit          int64    `json:"seeding_time_limit"`
-	SeenComplete              int64    `json:"seen_complete"`
+	SeenComplete              time.Time
 	SequentialDownload        bool     `json:"seq_dl"`
 	Size                      int64    `json:"size"`
 	State                     string   `json:"state"`
@@ -200,8 +198,6 @@ type TorrentsProperties struct {
 	UpSpeedAvg             int64   `json:"up_speed_avg"`
 }
 
-// TODO: Apply alias-based timestamp parsing to other structs.
-
 // UnmarshalJSON custom unmarshaller for TorrentsProperties to handle timestamps.
 func (t *TorrentsProperties) UnmarshalJSON(data []byte) error {
 	type Alias TorrentsProperties
@@ -234,11 +230,15 @@ func unixTimeOrZero(value int64) time.Time {
 	return time.Unix(value, 0)
 }
 
-// UnmarshalJSON custom unmarshaller for TorrentInfo to handle Tags
+// UnmarshalJSON custom unmarshaller for TorrentInfo to handle Tags and timestamps.
 func (t *TorrentInfo) UnmarshalJSON(data []byte) error {
 	type Alias TorrentInfo
 	aux := &struct {
-		RawTags string `json:"tags"`
+		RawTags      string `json:"tags"`
+		AddedOn      int64  `json:"added_on"`
+		CompletionOn int64  `json:"completion_on"`
+		LastActivity int64  `json:"last_activity"`
+		SeenComplete int64  `json:"seen_complete"`
 		*Alias
 	}{
 		Alias: (*Alias)(t),
@@ -255,6 +255,10 @@ func (t *TorrentInfo) UnmarshalJSON(data []byte) error {
 		}
 		t.Tags = parts
 	}
+	t.AddedOn = unixTimeOrZero(aux.AddedOn)
+	t.CompletionOn = unixTimeOrZero(aux.CompletionOn)
+	t.LastActivity = unixTimeOrZero(aux.LastActivity)
+	t.SeenComplete = unixTimeOrZero(aux.SeenComplete)
 	return nil
 }
 
@@ -342,25 +346,31 @@ type TorrentPeer struct {
 type TorrentPeers struct {
 	FullUpdate bool                   `json:"full_update"`
 	Peers      map[string]TorrentPeer `json:"peers"`
-	// PeersRemoved map[string][]string    `json:"peers_removed"`
+	PeersRemoved []string `json:"peers_removed"`
 	Rid       int  `json:"rid"`
 	ShowFlags bool `json:"show_flags"`
 }
 
 // NewClient initializes a new qBittorrent client.
-// If httpClient is nil, http.DefaultClient is used.
+// An optional *http.Client can be provided; its Transport will be reused, but
+// a new http.Client with a cookie jar is always created so the SID cookie is
+// managed automatically.
 func NewClient(username, password, baseURL string, httpClient ...*http.Client) (*Client, error) {
-	// Use the provided http.Client if given, otherwise use http.DefaultClient
-	client := http.DefaultClient
+	transport := http.DefaultTransport
 	if len(httpClient) > 0 && httpClient[0] != nil {
-		client = httpClient[0]
+		transport = httpClient[0].Transport
+	}
+
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cookie jar: %v", err)
 	}
 
 	// Create and return the Client instance
 	qbClient := &Client{
 		username: username,
 		password: password,
-		client:   client,
+		client:   &http.Client{Transport: transport, Jar: jar},
 		baseURL:  baseURL,
 	}
 
@@ -388,16 +398,6 @@ func (c *Client) AuthLogin() error {
 		return fmt.Errorf("AuthLogin error (%d): %s", resp.StatusCode, string(respBody))
 	}
 	defer resp.Body.Close()
-
-	// Extract the SID cookie from the response
-	for _, cookie := range resp.Cookies() {
-		if cookie.Name == "SID" {
-			c.mu.Lock()
-			c.sid = cookie.Value
-			c.mu.Unlock()
-			break
-		}
-	}
 
 	return nil
 }
@@ -832,12 +832,6 @@ func (c *Client) doRequest(method, endpoint string, body io.Reader, contentType 
 			req.Header.Set("Content-Type", contentType)
 		}
 
-		c.mu.RLock()
-		if c.sid != "" {
-			req.AddCookie(&http.Cookie{Name: "SID", Value: c.sid})
-		}
-		c.mu.RUnlock()
-
 		// Apply any optional request modifiers
 		for _, opt := range opts {
 			if err := opt(req); err != nil {
@@ -866,7 +860,7 @@ func (c *Client) doRequest(method, endpoint string, body io.Reader, contentType 
 			return nil, fmt.Errorf("re-authentication failed: %v", err)
 		}
 
-		// Retry the original request with the new SID
+		// Retry the original request with the new session cookie
 		req, err := makeRequest()
 		if err != nil {
 			return nil, err
@@ -933,9 +927,9 @@ func (c *Client) AuthLogout() error {
 	if err != nil {
 		return fmt.Errorf("AuthLogout error: %v", err)
 	}
-	c.mu.Lock()
-	c.sid = ""
-	c.mu.Unlock()
+	// Clear cookies by replacing the jar
+	jar, _ := cookiejar.New(nil)
+	c.client.Jar = jar
 	return nil
 }
 

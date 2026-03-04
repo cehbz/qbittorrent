@@ -135,6 +135,8 @@ fmt.Printf("Save path: %s, Total size: %d\n", props.SavePath, props.TotalSize)
 
 Timestamp fields (`AdditionDate`, `CreationDate`, `CompletionDate`, `LastSeen`) are parsed as `time.Time` values from Unix seconds.
 
+`TorrentInfo` timestamp fields (`AddedOn`, `CompletionOn`, `LastActivity`, `SeenComplete`) are also parsed as `time.Time`. A value of `-1` from the API is converted to the zero `time.Time`.
+
 ### Torrent Settings
 
 ```go

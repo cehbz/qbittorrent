@@ -3,6 +3,8 @@ package qbittorrent
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 )
 
@@ -172,6 +174,143 @@ func TestTorrentsProperties_Private(t *testing.T) {
 			t.Errorf("expected Private to be nil, got %v", *props.Private)
 		}
 	})
+}
+
+func TestCookieJar_SIDPersisted(t *testing.T) {
+	var requestCount atomic.Int32
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := requestCount.Add(1)
+		switch {
+		case r.URL.Path == "/api/v2/auth/login":
+			http.SetCookie(w, &http.Cookie{Name: "SID", Value: "test-session-id", Path: "/"})
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("Ok."))
+
+		case r.URL.Path == "/api/v2/app/version":
+			cookie, err := r.Cookie("SID")
+			if err != nil || cookie.Value != "test-session-id" {
+				t.Errorf("request %d: expected SID cookie 'test-session-id', got err=%v cookie=%v", n, err, cookie)
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("v5.0.3"))
+
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer ts.Close()
+
+	client, err := NewClient("user", "pass", ts.URL)
+	if err != nil {
+		t.Fatalf("NewClient error: %v", err)
+	}
+
+	version, err := client.AppVersion()
+	if err != nil {
+		t.Fatalf("AppVersion error: %v", err)
+	}
+	if version != "v5.0.3" {
+		t.Errorf("expected 'v5.0.3', got %q", version)
+	}
+}
+
+func TestCookieJar_ReauthOn403(t *testing.T) {
+	var loginCount atomic.Int32
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v2/auth/login":
+			n := loginCount.Add(1)
+			http.SetCookie(w, &http.Cookie{
+				Name:  "SID",
+				Value: "session-" + string(rune('0'+n)),
+				Path:  "/",
+			})
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("Ok."))
+
+		case "/api/v2/app/version":
+			cookie, err := r.Cookie("SID")
+			if err != nil || cookie.Value == "session-1" {
+				// First session is "expired"
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("v5.0.3"))
+
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer ts.Close()
+
+	client, err := NewClient("user", "pass", ts.URL)
+	if err != nil {
+		t.Fatalf("NewClient error: %v", err)
+	}
+
+	// First real request gets 403, triggers re-auth, retries with new session
+	version, err := client.AppVersion()
+	if err != nil {
+		t.Fatalf("AppVersion error: %v", err)
+	}
+	if version != "v5.0.3" {
+		t.Errorf("expected 'v5.0.3', got %q", version)
+	}
+	if loginCount.Load() != 2 {
+		t.Errorf("expected 2 logins (initial + re-auth), got %d", loginCount.Load())
+	}
+}
+
+func TestCookieJar_LogoutClearsCookies(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v2/auth/login":
+			http.SetCookie(w, &http.Cookie{Name: "SID", Value: "test-sid", Path: "/"})
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("Ok."))
+
+		case "/api/v2/auth/logout":
+			w.WriteHeader(http.StatusOK)
+
+		case "/api/v2/app/version":
+			_, err := r.Cookie("SID")
+			if err != nil {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("v5.0.3"))
+
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer ts.Close()
+
+	client, err := NewClient("user", "pass", ts.URL)
+	if err != nil {
+		t.Fatalf("NewClient error: %v", err)
+	}
+
+	err = client.AuthLogout()
+	if err != nil {
+		t.Fatalf("AuthLogout error: %v", err)
+	}
+
+	// After logout, cookie jar should be empty; next request should get 403
+	// which triggers re-auth (login again), so it should still succeed
+	version, err := client.AppVersion()
+	if err != nil {
+		t.Fatalf("AppVersion after logout error: %v", err)
+	}
+	if version != "v5.0.3" {
+		t.Errorf("expected 'v5.0.3', got %q", version)
+	}
 }
 
 func TestTorrentsPause(t *testing.T) {
