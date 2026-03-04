@@ -4,22 +4,22 @@ A Go client library for interacting with the [qBittorrent](https://www.qbittorre
 
 ## Features
 
-- **Authentication**: Log in to the qBittorrent Web API.
+- **Authentication**: Log in and log out of the qBittorrent Web API.
+- **App**: Get version, preferences, and default save path.
 - **Torrent Management**:
-  - Add new torrents (with flexible parameters).
-  - Delete existing torrents.
+  - Add, delete, pause, resume, recheck, and reannounce torrents.
   - Export torrent files.
-  - Download torrent files.
-  - Retrieve torrent information.
-  - Retrieve torrent generic properties.
-  - Manage torrent force-start settings.
+  - Retrieve torrent information and properties.
+  - Rename torrents, set location, force-start, and manage auto-TMM.
+  - List and set priority for files within a torrent.
+  - Set per-torrent download/upload/share limits.
 - **Tracker Information**: Fetch tracker details for specific torrents.
 - **Tag Management**: Create, delete, add, and remove tags from torrents.
+- **Category Management**: Create, edit, remove, and list categories.
+- **Transfer Info**: Get global transfer statistics.
 - **Synchronization**: Get main data and peer information for real-time updates.
 
 ## Installation
-
-To install the package, run:
 
 ```bash
 go get github.com/cehbz/qbittorrent
@@ -27,18 +27,12 @@ go get github.com/cehbz/qbittorrent
 
 ## Usage
 
-### Importing the Package
-
-```go
-import (
-    "github.com/cehbz/qbittorrent"
-)
-```
-
 ### Initializing the Client
 
 ```go
-client, err := qbittorrent.NewClient("username", "password", "localhost", "8080")
+import "github.com/cehbz/qbittorrent"
+
+client, err := qbittorrent.NewClient("username", "password", "http://localhost:8080")
 if err != nil {
     log.Fatalf("Failed to create client: %v", err)
 }
@@ -46,8 +40,7 @@ if err != nil {
 
 - `username`: Your qBittorrent Web UI username. Empty if none.
 - `password`: Your qBittorrent Web UI password. Empty if none.
-- `addr`: The address where qBittorrent is running (e.g., `"127.0.0.1"`).
-- `port`: The port number of the qBittorrent Web UI (e.g., `"8080"`).
+- `baseURL`: The full base URL where qBittorrent is running (e.g., `"http://localhost:8080"`).
 
 ### Adding a Torrent
 
@@ -58,7 +51,7 @@ if err != nil {
     log.Fatalf("Failed to read torrent file: %v", err)
 }
 
-err = client.TorrentsAdd("your.torrent", torrentData)
+err = client.TorrentsAdd(torrentData)
 if err != nil {
     log.Fatalf("Failed to add torrent: %v", err)
 }
@@ -67,13 +60,15 @@ if err != nil {
 #### Advanced Method with Parameters
 ```go
 params := &qbittorrent.TorrentsAddParams{
-    Torrents:  [][]byte{torrentData},
-    SavePath:  "/downloads/movies",
-    Category:  "movies",
-    Tags:      "hd,x265",
-    SkipCheck: true,
-    Paused:    false,
-    AutoTMM:   true,
+    Torrents:      [][]byte{torrentData},
+    SavePath:      "/downloads/movies",
+    Category:      "movies",
+    Tags:          "hd,x265",
+    SkipCheck:     true,
+    Paused:        boolPtr(false),
+    AutoTMM:       boolPtr(true),
+    ContentLayout: "Original",   // "Original", "Subfolder", or "NoSubfolder"
+    StopCondition: "MetadataReceived", // or "FilesChecked"
 }
 
 err = client.TorrentsAddParams(params)
@@ -82,13 +77,27 @@ if err != nil {
 }
 ```
 
-### Deleting a Torrent
+Note: `Paused`, `AutoTMM`, `RootFolder`, and `AddToTopOfQueue` are `*bool` fields. Use a helper to set them:
+```go
+func boolPtr(b bool) *bool { return &b }
+```
+
+### Deleting Torrents
 
 ```go
-err := client.TorrentsDelete("torrent-hash")
+err := client.TorrentsDelete([]string{"hash1", "hash2"}, true) // true = delete files
 if err != nil {
     log.Fatalf("Failed to delete torrent: %v", err)
 }
+```
+
+### Pause, Resume, Recheck, Reannounce
+
+```go
+client.TorrentsPause([]string{"hash1", "hash2"})
+client.TorrentsResume([]string{"hash1"})
+client.TorrentsRecheck([]string{"hash1"})
+client.TorrentsReannounce([]string{"hash1"})
 ```
 
 ### Exporting a Torrent File
@@ -98,25 +107,7 @@ data, err := client.TorrentsExport("torrent-hash")
 if err != nil {
     log.Fatalf("Failed to export torrent: %v", err)
 }
-
-err = os.WriteFile("exported.torrent", data, 0644)
-if err != nil {
-    log.Fatalf("Failed to write exported torrent file: %v", err)
-}
-```
-
-### Downloading a Torrent File
-
-```go
-data, err := client.TorrentsDownload("torrent-hash")
-if err != nil {
-    log.Fatalf("Failed to download torrent: %v", err)
-}
-
-err = os.WriteFile("downloaded.torrent", data, 0644)
-if err != nil {
-    log.Fatalf("Failed to write downloaded torrent file: %v", err)
-}
+os.WriteFile("exported.torrent", data, 0644)
 ```
 
 ### Retrieving Torrent Information
@@ -124,13 +115,6 @@ if err != nil {
 ```go
 // Get all torrents
 torrents, err := client.TorrentsInfo()
-if err != nil {
-    log.Fatalf("Failed to retrieve torrents info: %v", err)
-}
-
-for _, torrent := range torrents {
-    fmt.Printf("Name: %s, Progress: %.2f%%\n", torrent.Name, torrent.Progress*100)
-}
 
 // Get specific torrents with filters
 params := &qbittorrent.TorrentsInfoParams{
@@ -139,43 +123,52 @@ params := &qbittorrent.TorrentsInfoParams{
     Reverse:  true,
     Limit:    10,
 }
-
 filteredTorrents, err := client.TorrentsInfo(params)
-if err != nil {
-    log.Fatalf("Failed to retrieve filtered torrents: %v", err)
-}
 ```
 
-### Retrieving Torrent Generic Properties
+### Retrieving Torrent Properties
 
 ```go
 props, err := client.TorrentsProperties("torrent-hash")
-if err != nil {
-    log.Fatalf("Failed to retrieve torrent properties: %v", err)
-}
-
 fmt.Printf("Save path: %s, Total size: %d\n", props.SavePath, props.TotalSize)
 ```
 
-`TorrentsProperties` timestamp fields (`AdditionDate`, `CreationDate`, `CompletionDate`, `LastSeen`) are returned as `time.Time` values parsed from Unix seconds.
+Timestamp fields (`AdditionDate`, `CreationDate`, `CompletionDate`, `LastSeen`) are parsed as `time.Time` values from Unix seconds.
 
-### Managing Torrent Force Start
+### Torrent Settings
 
 ```go
-err := client.SetForceStart("torrent-hash", true)
-if err != nil {
-    log.Fatalf("Failed to set force start: %v", err)
-}
+client.SetForceStart([]string{"hash1"}, true)
+client.TorrentsSetLocation([]string{"hash1"}, "/new/path")
+client.TorrentsSetCategory([]string{"hash1"}, "movies")
+client.TorrentsSetAutoTMM([]string{"hash1"}, true)
+client.TorrentsRename("hash1", "New Name")
 ```
 
-### Fetching Tracker Information
+### Per-Torrent Limits
+
+```go
+client.TorrentsSetDownloadLimit([]string{"hash1"}, 1048576) // 1 MB/s
+client.TorrentsSetUploadLimit([]string{"hash1"}, 524288)    // 512 KB/s
+client.TorrentsSetShareLimits([]string{"hash1"}, 2.0, 1440, 720) // ratio, seeding time, inactive time
+```
+
+### Torrent Files
+
+```go
+files, err := client.TorrentsFiles("hash1")
+for _, f := range files {
+    fmt.Printf("%s (%d bytes, priority %d)\n", f.Name, f.Size, f.Priority)
+}
+
+// Set file priority (7 = maximum)
+client.TorrentsFilePrio("hash1", []int{0, 1}, 7)
+```
+
+### Tracker Information
 
 ```go
 trackers, err := client.TorrentsTrackers("torrent-hash")
-if err != nil {
-    log.Fatalf("Failed to get trackers: %v", err)
-}
-
 for _, tracker := range trackers {
     fmt.Printf("URL: %s, Status: %d\n", tracker.URL, tracker.Status)
 }
@@ -184,60 +177,50 @@ for _, tracker := range trackers {
 ### Tag Management
 
 ```go
-// Create new tags
-err := client.TorrentsCreateTags("hd,x265,4k")
-if err != nil {
-    log.Fatalf("Failed to create tags: %v", err)
-}
+client.TorrentsCreateTags("hd,x265,4k")
+client.TorrentsAddTags([]string{"hash1", "hash2"}, "hd,x265")
+client.TorrentsRemoveTags([]string{"hash1"}, "old-tag")
 
-// Add tags to torrents
-err = client.TorrentsAddTags("torrent-hash1|torrent-hash2", "hd,x265")
-if err != nil {
-    log.Fatalf("Failed to add tags: %v", err)
-}
+tags, _ := client.TorrentsGetTags([]string{"hash1"})
+allTags, _ := client.TorrentsGetAllTags()
 
-// Remove tags from torrents
-err = client.TorrentsRemoveTags("torrent-hash", "old-tag")
-if err != nil {
-    log.Fatalf("Failed to remove tags: %v", err)
-}
-
-// Get tags for specific torrents
-tags, err := client.TorrentsGetTags("torrent-hash")
-if err != nil {
-    log.Fatalf("Failed to get tags: %v", err)
-}
-
-// Get all available tags
-allTags, err := client.TorrentsGetAllTags()
-if err != nil {
-    log.Fatalf("Failed to get all tags: %v", err)
-}
-
-// Delete tags
-err = client.TorrentsDeleteTags("unused-tag")
-if err != nil {
-    log.Fatalf("Failed to delete tags: %v", err)
-}
+client.TorrentsDeleteTags("unused-tag")
 ```
 
-### Synchronization (Real-time Updates)
+### Category Management
 
 ```go
-// Get main data for synchronization
-mainData, err := client.SyncMainData(0) // 0 for initial request
-if err != nil {
-    log.Fatalf("Failed to get main data: %v", err)
-}
+categories, _ := client.TorrentsCategories()
+client.TorrentsCreateCategory("movies", "/downloads/movies")
+client.TorrentsEditCategory("movies", "/new/path")
+client.TorrentsRemoveCategories([]string{"movies", "tv"})
+```
 
-// Use the returned rid for subsequent requests
+### App Info
+
+```go
+version, _ := client.AppVersion()         // e.g. "v4.6.0"
+savePath, _ := client.AppDefaultSavePath() // e.g. "/downloads"
+prefs, _ := client.AppPreferences()        // map[string]any
+client.SetAppPreferences(map[string]any{"save_path": "/new/downloads"})
+client.AuthLogout()
+```
+
+### Transfer Info
+
+```go
+info, _ := client.TransferGetInfo()
+fmt.Printf("DL: %d B/s, UL: %d B/s, DHT: %d nodes\n",
+    info.DLInfoSpeed, info.UPInfoSpeed, info.DHTNodes)
+```
+
+### Synchronization
+
+```go
+mainData, _ := client.SyncMainData(0)
 nextRid := mainData.Rid
 
-// Get peer information for a specific torrent
-peers, err := client.SyncTorrentPeers("torrent-hash", 0)
-if err != nil {
-    log.Fatalf("Failed to get peer data: %v", err)
-}
+peers, _ := client.SyncTorrentPeers("torrent-hash", 0)
 ```
 
 ## License
