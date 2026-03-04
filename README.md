@@ -22,7 +22,7 @@ A Go client library for interacting with the [qBittorrent](https://www.qbittorre
 ## Installation
 
 ```bash
-go get github.com/cehbz/qbittorrent
+go get github.com/cehbz/qbittorrent/v2
 ```
 
 ## Usage
@@ -30,7 +30,7 @@ go get github.com/cehbz/qbittorrent
 ### Initializing the Client
 
 ```go
-import "github.com/cehbz/qbittorrent"
+import "github.com/cehbz/qbittorrent/v2"
 
 client, err := qbittorrent.NewClient("username", "password", "http://localhost:8080")
 if err != nil {
