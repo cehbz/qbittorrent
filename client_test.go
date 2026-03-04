@@ -145,19 +145,33 @@ func TestTorrentsTrackers(t *testing.T) {
 	}
 }
 
-func TestTorrentsProperties_IsPrivate(t *testing.T) {
-	jsonData := `{"is_private": true, "addition_date": 1770257484, "completion_date": -1, "creation_date": 1483593698, "last_seen": -1, "name": "test", "popularity": 1.5}`
-	var props TorrentsProperties
-	err := json.Unmarshal([]byte(jsonData), &props)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if !props.IsPrivate {
-		t.Error("expected IsPrivate to be true")
-	}
-	if props.Popularity != 1.5 {
-		t.Errorf("expected Popularity 1.5, got %f", props.Popularity)
-	}
+func TestTorrentsProperties_Private(t *testing.T) {
+	t.Run("private true", func(t *testing.T) {
+		jsonData := `{"private": true, "addition_date": 1770257484, "completion_date": -1, "creation_date": 1483593698, "last_seen": -1, "name": "test", "popularity": 1.5}`
+		var props TorrentsProperties
+		err := json.Unmarshal([]byte(jsonData), &props)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if props.Private == nil || !*props.Private {
+			t.Error("expected Private to be true")
+		}
+		if props.Popularity != 1.5 {
+			t.Errorf("expected Popularity 1.5, got %f", props.Popularity)
+		}
+	})
+
+	t.Run("private null (no metadata)", func(t *testing.T) {
+		jsonData := `{"private": null, "addition_date": 0, "completion_date": -1, "creation_date": 0, "last_seen": -1}`
+		var props TorrentsProperties
+		err := json.Unmarshal([]byte(jsonData), &props)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if props.Private != nil {
+			t.Errorf("expected Private to be nil, got %v", *props.Private)
+		}
+	})
 }
 
 func TestTorrentsPause(t *testing.T) {

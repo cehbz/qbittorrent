@@ -31,18 +31,27 @@ type Client struct {
 	mu       sync.RWMutex
 }
 
-// TorrentInfo represents the structured information of a torrent from the qBittorrent API
+// TorrentInfo represents the structured information of a torrent from the qBittorrent API.
+//
+// The following fields are returned by the live API (v5.0.3) but absent from the
+// v5.0 wiki docs: Comment, DownloadPath, HasMetadata, InactiveSeedingTimeLimit,
+// InfoHashV1, InfoHashV2, MaxInactiveSeedingTime, Popularity, Private, RootPath,
+// TrackersCount.
+//
+// The wiki documents "isPrivate" (bool) but the live API returns "private" (*bool,
+// nullable when metadata is unavailable). The old "isPrivate" key is no longer sent
+// by this endpoint.
 type TorrentInfo struct {
 	AddedOn                   int64    `json:"added_on"`
 	AmountLeft                int64    `json:"amount_left"`
 	AutoTMM                   bool     `json:"auto_tmm"`
 	Availability              float64  `json:"availability"`
 	Category                  string   `json:"category"`
-	Comment                   string   `json:"comment"`
+	Comment                   string   `json:"comment"`                    // undocumented
 	Completed                 int64    `json:"completed"`
 	CompletionOn              int64    `json:"completion_on"`
 	ContentPath               string   `json:"content_path"`
-	DownloadPath              string   `json:"download_path"`
+	DownloadPath              string   `json:"download_path"`              // undocumented
 	DLLimit                   int64    `json:"dl_limit"`
 	DLSpeed                   int64    `json:"dlspeed"`
 	Downloaded                int64    `json:"downloaded"`
@@ -51,13 +60,13 @@ type TorrentInfo struct {
 	FirstLastPiecePrio        bool     `json:"f_l_piece_prio"`
 	ForceStart                bool     `json:"force_start"`
 	Hash                      InfoHash `json:"hash"`
-	HasMetadata               bool     `json:"has_metadata"`
-	InactiveSeedingTimeLimit  int64    `json:"inactive_seeding_time_limit"`
-	InfoHashV1                InfoHash `json:"infohash_v1"`
-	InfoHashV2                InfoHash `json:"infohash_v2"`
+	HasMetadata               bool     `json:"has_metadata"`              // undocumented
+	InactiveSeedingTimeLimit  int64    `json:"inactive_seeding_time_limit"` // undocumented
+	InfoHashV1                InfoHash `json:"infohash_v1"`               // undocumented
+	InfoHashV2                InfoHash `json:"infohash_v2"`               // undocumented
 	LastActivity              int64    `json:"last_activity"`
 	MagnetURI                 string   `json:"magnet_uri"`
-	MaxInactiveSeedingTime    int64    `json:"max_inactive_seeding_time"`
+	MaxInactiveSeedingTime    int64    `json:"max_inactive_seeding_time"` // undocumented
 	MaxRatio                  float64  `json:"max_ratio"`
 	MaxSeedingTime            int64    `json:"max_seeding_time"`
 	Name                      string   `json:"name"`
@@ -65,14 +74,14 @@ type TorrentInfo struct {
 	NumIncomplete             int64    `json:"num_incomplete"`
 	NumLeechs                 int64    `json:"num_leechs"`
 	NumSeeds                  int64    `json:"num_seeds"`
-	Popularity                float64  `json:"popularity"`
+	Popularity                float64  `json:"popularity"`                // undocumented
 	Priority                  int64    `json:"priority"`
-	Private                   bool     `json:"private"`
+	Private                   *bool    `json:"private"`                   // undocumented; replaces docs' "isPrivate"; null when no metadata
 	Progress                  float64  `json:"progress"`
 	Ratio                     float64  `json:"ratio"`
 	RatioLimit                float64  `json:"ratio_limit"`
 	Reannounce                int64    `json:"reannounce"`
-	RootPath                  string   `json:"root_path"`
+	RootPath                  string   `json:"root_path"`                 // undocumented
 	SavePath                  string   `json:"save_path"`
 	SeedingTime               int64    `json:"seeding_time"`
 	SeedingTimeLimit          int64    `json:"seeding_time_limit"`
@@ -81,11 +90,11 @@ type TorrentInfo struct {
 	Size                      int64    `json:"size"`
 	State                     string   `json:"state"`
 	SuperSeeding              bool     `json:"super_seeding"`
-	Tags                      []string `json:"-"`
+	Tags                      []string `json:"-"`                         // parsed from comma-separated string in custom UnmarshalJSON
 	TimeActive                int64    `json:"time_active"`
 	TotalSize                 int64    `json:"total_size"`
 	Tracker                   string   `json:"tracker"`
-	TrackersCount             int      `json:"trackers_count"`
+	TrackersCount             int      `json:"trackers_count"`            // undocumented
 	UpLimit                   int64    `json:"up_limit"`
 	Uploaded                  int64    `json:"uploaded"`
 	UploadedSession           int64    `json:"uploaded_session"`
@@ -93,6 +102,17 @@ type TorrentInfo struct {
 }
 
 // TorrentsProperties represents generic properties for a torrent.
+//
+// The following fields are returned by the live API (v5.0.3) but absent from the
+// v5.0 wiki docs: DownloadPath, HasMetadata, Hash, InfoHashV1, InfoHashV2, Name,
+// Popularity, Private.
+//
+// The wiki documents "isPrivate" (bool). The live API returns both "is_private"
+// (deprecated backward-compat, always bool) and "private" (*bool, nullable when
+// metadata is unavailable). We use only "private" since "is_private" is deprecated.
+//
+// Timestamp fields (AdditionDate, CompletionDate, CreationDate, LastSeen) are
+// parsed from Unix seconds via custom UnmarshalJSON.
 /*
   "addition_date": 1770257484,
   "comment": "https://redacted.sh/torrents.php?torrentid=664915",
@@ -108,7 +128,6 @@ type TorrentInfo struct {
   "hash": "5a0ff0482cb309913568bee1db6d68f7e5ef1f6d",
   "infohash_v1": "5a0ff0482cb309913568bee1db6d68f7e5ef1f6d",
   "infohash_v2": "",
-  "is_private": true,
   "last_seen": 1770257488,
   "name": "Jesca Hoop - Hunting My Dress (2010 Deluxe Edition) [FLAC]",
   "nb_connections": 0,
@@ -146,15 +165,14 @@ type TorrentsProperties struct {
 	DLLimit                int64    `json:"dl_limit"`
 	DLSpeed                int64    `json:"dl_speed"`
 	DLSpeedAvg             int64    `json:"dl_speed_avg"`
-	DownloadPath           string   `json:"download_path"`
+	DownloadPath           string   `json:"download_path"`  // undocumented
 	ETA                    int64    `json:"eta"`
-	HasMetadata            bool     `json:"has_metadata"`
-	Hash                   InfoHash `json:"hash"`
-	InfoHashV1             InfoHash `json:"infohash_v1"`
-	InfoHashV2             InfoHash `json:"infohash_v2"`
-	IsPrivate              bool     `json:"is_private"`
+	HasMetadata            bool     `json:"has_metadata"`  // undocumented
+	Hash                   InfoHash `json:"hash"`          // undocumented
+	InfoHashV1             InfoHash `json:"infohash_v1"`   // undocumented
+	InfoHashV2             InfoHash `json:"infohash_v2"`   // undocumented
 	LastSeen               time.Time
-	Name                   string  `json:"name"`
+	Name                   string  `json:"name"`           // undocumented
 	NbConnections          int64   `json:"nb_connections"`
 	NbConnectionsLimit     int64   `json:"nb_connections_limit"`
 	Peers                  int64   `json:"peers"`
@@ -162,8 +180,8 @@ type TorrentsProperties struct {
 	PiecesHave             int64   `json:"pieces_have"`
 	PieceSize              int64   `json:"piece_size"`
 	PiecesNum              int64   `json:"pieces_num"`
-	Popularity             float64 `json:"popularity"`
-	Private                bool    `json:"private"`
+	Popularity             float64 `json:"popularity"` // undocumented
+	Private                *bool   `json:"private"`   // undocumented; replaces docs' "isPrivate"; null when no metadata
 	Reannounce             int64   `json:"reannounce"`
 	SavePath               string  `json:"save_path"`
 	SeedingTime            int64   `json:"seeding_time"`
