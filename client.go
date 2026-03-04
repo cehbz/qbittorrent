@@ -16,6 +16,11 @@ import (
 
 type InfoHash string
 
+// joinHashes joins a slice of hashes with the pipe separator expected by the qBittorrent API.
+func joinHashes(hashes []string) string {
+	return strings.Join(hashes, "|")
+}
+
 // Client is used to interact with the qBittorrent API
 type Client struct {
 	username string
@@ -36,6 +41,7 @@ type TorrentInfo struct {
 	Completed          int64    `json:"completed"`
 	CompletionOn       int64    `json:"completion_on"`
 	ContentPath        string   `json:"content_path"`
+	DownloadPath       string   `json:"download_path"`
 	DLLimit            int64    `json:"dl_limit"`
 	DLSpeed            int64    `json:"dlspeed"`
 	Downloaded         int64    `json:"downloaded"`
@@ -44,6 +50,8 @@ type TorrentInfo struct {
 	FirstLastPiecePrio bool     `json:"f_l_piece_prio"`
 	ForceStart         bool     `json:"force_start"`
 	Hash               InfoHash `json:"hash"`
+	InfoHashV1         InfoHash `json:"infohash_v1"`
+	InfoHashV2         InfoHash `json:"infohash_v2"`
 	IsPrivate          bool     `json:"isPrivate"`
 	LastActivity       int64    `json:"last_activity"`
 	MagnetURI          string   `json:"magnet_uri"`
@@ -54,6 +62,7 @@ type TorrentInfo struct {
 	NumIncomplete      int64    `json:"num_incomplete"`
 	NumLeechs          int64    `json:"num_leechs"`
 	NumSeeds           int64    `json:"num_seeds"`
+	Popularity         float64  `json:"popularity"`
 	Priority           int64    `json:"priority"`
 	Progress           float64  `json:"progress"`
 	Ratio              float64  `json:"ratio"`
@@ -136,7 +145,7 @@ type TorrentsProperties struct {
 	Hash                   InfoHash `json:"hash"`
 	InfoHashV1             InfoHash `json:"infohash_v1"`
 	InfoHashV2             InfoHash `json:"infohash_v2"`
-	IsPrivate              bool     `json:"isPrivate"`
+	IsPrivate              bool     `json:"is_private"`
 	LastSeen               time.Time
 	Name                   string  `json:"name"`
 	NbConnections          int64   `json:"nb_connections"`
@@ -215,28 +224,39 @@ func (t *TorrentInfo) UnmarshalJSON(data []byte) error {
 	if aux.RawTags == "" {
 		t.Tags = []string{}
 	} else {
-		t.Tags = strings.Split(aux.RawTags, ",")
+		parts := strings.Split(aux.RawTags, ",")
+		for i := range parts {
+			parts[i] = strings.TrimSpace(parts[i])
+		}
+		t.Tags = parts
 	}
 	return nil
 }
 
 // TrackerInfo represents a tracker info for a torrent
 type TrackerInfo struct {
-	URL      string `json:"url"`
-	Status   int    `json:"status"`
-	Tier     int    `json:"tier"`
-	NumPeers int    `json:"num_peers"`
-	Msg      string `json:"msg"`
+	URL           string `json:"url"`
+	Status        int    `json:"status"`
+	Tier          int    `json:"tier"`
+	NumPeers      int    `json:"num_peers"`
+	NumSeeds      int    `json:"num_seeds"`
+	NumLeeches    int    `json:"num_leeches"`
+	NumDownloaded int    `json:"num_downloaded"`
+	Msg           string `json:"msg"`
 }
 
-type Category map[string]interface{} // no idea what this should be, category=CategoryName&savePath=/path/to/dir
+// Category represents a torrent category with its save path.
+type Category struct {
+	Name     string `json:"name"`
+	SavePath string `json:"savePath"`
+}
 
 // fields might be missing, in which case we need to switch to pointers and allow "omitempty"
 // https://github.com/qbittorrent/qBittorrent/blob/master/src/base/json_api.cpp#L101
 // MainData is the data returned by the /api/v2/sync/maindata endpoint
 type MainData struct {
 	Categories        map[string]Category    `json:"categories"`
-	CategoriesRemoved []Category             `json:"categories_removed"`
+	CategoriesRemoved []string               `json:"categories_removed"`
 	FullUpdate        bool                   `json:"full_update"`
 	Rid               int                    `json:"rid"`
 	ServerState       ServerState            `json:"server_state"`
@@ -374,17 +394,21 @@ type TorrentsAddParams struct {
 	Cookie      string   // Cookie sent to download the .torrent file
 	Category    string   // Category for the torrent
 	Tags        string   // Tags for the torrent, comma separated
-	SkipCheck   bool     // Skip hash checking
-	Paused      bool     // Add torrents in the paused state
-	RootFolder  *bool    // Create the root folder (default: true)
-	Rename      string   // Rename torrent
-	UpLimit     int      // Set torrent upload speed limit (bytes/second)
-	DlLimit     int      // Set torrent download speed limit (bytes/second)
-	RatioLimit  float64  // Set torrent share ratio limit
-	SeedingTime int      // Set torrent seeding time limit (minutes)
-	AutoTMM     bool     // Whether Automatic Torrent Management should be used
-	Sequential  bool     // Enable sequential download
-	FirstLast   bool     // Prioritize download first last piece
+	SkipCheck               bool     // Skip hash checking
+	Paused                  *bool    // Add torrents in the paused state
+	RootFolder              *bool    // Create the root folder (default: true)
+	ContentLayout           string   // Content layout: "Original", "Subfolder", "NoSubfolder"
+	StopCondition           string   // Stop condition: "MetadataReceived" or "FilesChecked"
+	Rename                  string   // Rename torrent
+	UpLimit                 int      // Set torrent upload speed limit (bytes/second)
+	DlLimit                 int      // Set torrent download speed limit (bytes/second)
+	RatioLimit              float64  // Set torrent share ratio limit
+	SeedingTime             int      // Set torrent seeding time limit (minutes)
+	InactiveSeedingTimeLimit int     // Set inactive seeding time limit (minutes)
+	AutoTMM                 *bool    // Whether Automatic Torrent Management should be used
+	Sequential              bool     // Enable sequential download
+	FirstLast               bool     // Prioritize download first last piece
+	AddToTopOfQueue         *bool    // Add torrent to top of queue
 }
 
 // TorrentsAddParams adds a torrent using a more flexible parameter structure
@@ -424,11 +448,17 @@ func (c *Client) TorrentsAddParams(params *TorrentsAddParams) error {
 	if params.SkipCheck {
 		_ = writer.WriteField("skip_checking", "true")
 	}
-	if params.Paused {
-		_ = writer.WriteField("paused", "true")
+	if params.Paused != nil {
+		_ = writer.WriteField("paused", fmt.Sprintf("%t", *params.Paused))
 	}
 	if params.RootFolder != nil {
 		_ = writer.WriteField("root_folder", fmt.Sprintf("%t", *params.RootFolder))
+	}
+	if params.ContentLayout != "" {
+		_ = writer.WriteField("contentLayout", params.ContentLayout)
+	}
+	if params.StopCondition != "" {
+		_ = writer.WriteField("stopCondition", params.StopCondition)
 	}
 	if params.Rename != "" {
 		_ = writer.WriteField("rename", params.Rename)
@@ -445,14 +475,20 @@ func (c *Client) TorrentsAddParams(params *TorrentsAddParams) error {
 	if params.SeedingTime > 0 {
 		_ = writer.WriteField("seedingTimeLimit", strconv.Itoa(params.SeedingTime))
 	}
-	if params.AutoTMM {
-		_ = writer.WriteField("autoTMM", "true")
+	if params.InactiveSeedingTimeLimit > 0 {
+		_ = writer.WriteField("inactiveSeedingTimeLimit", strconv.Itoa(params.InactiveSeedingTimeLimit))
+	}
+	if params.AutoTMM != nil {
+		_ = writer.WriteField("autoTMM", fmt.Sprintf("%t", *params.AutoTMM))
 	}
 	if params.Sequential {
 		_ = writer.WriteField("sequentialDownload", "true")
 	}
 	if params.FirstLast {
 		_ = writer.WriteField("firstLastPiecePrio", "true")
+	}
+	if params.AddToTopOfQueue != nil {
+		_ = writer.WriteField("addToTopOfQueue", fmt.Sprintf("%t", *params.AddToTopOfQueue))
 	}
 
 	writer.Close()
@@ -464,22 +500,27 @@ func (c *Client) TorrentsAddParams(params *TorrentsAddParams) error {
 	return nil
 }
 
+// boolPtr returns a pointer to the given bool value.
+func boolPtr(b bool) *bool {
+	return &b
+}
+
 // TorrentsAdd adds a torrent to qBittorrent via Web API using multipart/form-data
-func (c *Client) TorrentsAdd(torrentFile string, fileData []byte) error {
+func (c *Client) TorrentsAdd(fileData []byte) error {
 	params := &TorrentsAddParams{
 		Torrents:  [][]byte{fileData},
 		SkipCheck: true,
-		Paused:    false,
-		AutoTMM:   false,
+		Paused:    boolPtr(false),
+		AutoTMM:   boolPtr(false),
 	}
 	return c.TorrentsAddParams(params)
 }
 
-// TorrentsDelete deletes a torrent from qBittorrent by its hash
-func (c *Client) TorrentsDelete(infohash string) error {
+// TorrentsDelete deletes torrents from qBittorrent by their hashes
+func (c *Client) TorrentsDelete(hashes []string, deleteFiles bool) error {
 	data := url.Values{}
-	data.Set("hashes", infohash)
-	data.Set("deleteFiles", "true")
+	data.Set("hashes", joinHashes(hashes))
+	data.Set("deleteFiles", fmt.Sprintf("%t", deleteFiles))
 
 	_, err := c.doPostValues("/api/v2/torrents/delete", data)
 	if err != nil {
@@ -488,10 +529,10 @@ func (c *Client) TorrentsDelete(infohash string) error {
 	return nil
 }
 
-// SetForceStart enables force start for the torrent
-func (c *Client) SetForceStart(hash string, value bool) error {
+// SetForceStart enables force start for the specified torrents
+func (c *Client) SetForceStart(hashes []string, value bool) error {
 	data := url.Values{}
-	data.Set("hashes", hash)
+	data.Set("hashes", joinHashes(hashes))
 	data.Set("value", fmt.Sprintf("%t", value))
 
 	_, err := c.doPostValues("/api/v2/torrents/setForceStart", data)
@@ -501,10 +542,6 @@ func (c *Client) SetForceStart(hash string, value bool) error {
 	return nil
 }
 
-// TorrentsDownload retrieves the torrent file by its hash from the qBittorrent server
-func (c *Client) TorrentsDownload(infohash string) ([]byte, error) {
-	return c.doGet("/api/v2/torrents/file", url.Values{"hashes": {infohash}})
-}
 
 // TorrentsInfoParams holds the optional parameters for the TorrentsInfo method
 type TorrentsInfoParams struct {
@@ -602,9 +639,9 @@ func (c *Client) TorrentsProperties(hash string) (*TorrentsProperties, error) {
 }
 
 // TorrentsAddTags adds tags to the specified torrents
-func (c *Client) TorrentsAddTags(hashes, tags string) error {
+func (c *Client) TorrentsAddTags(hashes []string, tags string) error {
 	data := url.Values{}
-	data.Set("hashes", hashes)
+	data.Set("hashes", joinHashes(hashes))
 	data.Set("tags", tags)
 
 	_, err := c.doPostValues("/api/v2/torrents/addTags", data)
@@ -615,9 +652,9 @@ func (c *Client) TorrentsAddTags(hashes, tags string) error {
 }
 
 // TorrentsRemoveTags removes tags from the specified torrents
-func (c *Client) TorrentsRemoveTags(hashes, tags string) error {
+func (c *Client) TorrentsRemoveTags(hashes []string, tags string) error {
 	data := url.Values{}
-	data.Set("hashes", hashes)
+	data.Set("hashes", joinHashes(hashes))
 	data.Set("tags", tags)
 
 	_, err := c.doPostValues("/api/v2/torrents/removeTags", data)
@@ -628,9 +665,9 @@ func (c *Client) TorrentsRemoveTags(hashes, tags string) error {
 }
 
 // TorrentsGetTags retrieves the tags for the given torrent hashes
-func (c *Client) TorrentsGetTags(hashes string) ([]string, error) {
+func (c *Client) TorrentsGetTags(hashes []string) ([]string, error) {
 	params := &TorrentsInfoParams{
-		Hashes: []string{hashes},
+		Hashes: hashes,
 	}
 
 	torrents, err := c.TorrentsInfo(params)
@@ -861,4 +898,323 @@ func (c *Client) SyncTorrentPeers(hash string, rid int) (*TorrentPeers, error) {
 	}
 
 	return &result, nil
+}
+
+// --- Auth ---
+
+// AuthLogout logs out from the qBittorrent Web API
+func (c *Client) AuthLogout() error {
+	_, err := c.doPostValues("/api/v2/auth/logout", url.Values{})
+	if err != nil {
+		return fmt.Errorf("AuthLogout error: %v", err)
+	}
+	c.mu.Lock()
+	c.sid = ""
+	c.mu.Unlock()
+	return nil
+}
+
+// --- App ---
+
+// AppVersion returns the qBittorrent application version
+func (c *Client) AppVersion() (string, error) {
+	data, err := c.doGet("/api/v2/app/version", nil)
+	if err != nil {
+		return "", fmt.Errorf("AppVersion error: %v", err)
+	}
+	return string(data), nil
+}
+
+// AppPreferences returns the qBittorrent application preferences
+func (c *Client) AppPreferences() (map[string]any, error) {
+	data, err := c.doGet("/api/v2/app/preferences", nil)
+	if err != nil {
+		return nil, fmt.Errorf("AppPreferences error: %v", err)
+	}
+	var prefs map[string]any
+	if err := json.Unmarshal(data, &prefs); err != nil {
+		return nil, fmt.Errorf("failed to decode preferences: %v", err)
+	}
+	return prefs, nil
+}
+
+// SetAppPreferences sets qBittorrent application preferences
+func (c *Client) SetAppPreferences(prefs map[string]any) error {
+	prefsJSON, err := json.Marshal(prefs)
+	if err != nil {
+		return fmt.Errorf("failed to marshal preferences: %v", err)
+	}
+	data := url.Values{}
+	data.Set("json", string(prefsJSON))
+	_, err = c.doPostValues("/api/v2/app/setPreferences", data)
+	if err != nil {
+		return fmt.Errorf("SetAppPreferences error: %v", err)
+	}
+	return nil
+}
+
+// AppDefaultSavePath returns the default save path
+func (c *Client) AppDefaultSavePath() (string, error) {
+	data, err := c.doGet("/api/v2/app/defaultSavePath", nil)
+	if err != nil {
+		return "", fmt.Errorf("AppDefaultSavePath error: %v", err)
+	}
+	return string(data), nil
+}
+
+// --- Transfer ---
+
+// TransferInfo holds global transfer statistics
+type TransferInfo struct {
+	DLInfoSpeed      int64  `json:"dl_info_speed"`
+	DLInfoData       int64  `json:"dl_info_data"`
+	UPInfoSpeed      int64  `json:"up_info_speed"`
+	UPInfoData       int64  `json:"up_info_data"`
+	DLRateLimit      int64  `json:"dl_rate_limit"`
+	UPRateLimit      int64  `json:"up_rate_limit"`
+	DHTNodes         int    `json:"dht_nodes"`
+	ConnectionStatus string `json:"connection_status"`
+}
+
+// TransferGetInfo retrieves global transfer info
+func (c *Client) TransferGetInfo() (*TransferInfo, error) {
+	data, err := c.doGet("/api/v2/transfer/info", nil)
+	if err != nil {
+		return nil, fmt.Errorf("TransferInfo error: %v", err)
+	}
+	var info TransferInfo
+	if err := json.Unmarshal(data, &info); err != nil {
+		return nil, fmt.Errorf("failed to decode transfer info: %v", err)
+	}
+	return &info, nil
+}
+
+// --- Torrent actions (critical) ---
+
+// TorrentsPause pauses the specified torrents
+func (c *Client) TorrentsPause(hashes []string) error {
+	data := url.Values{}
+	data.Set("hashes", joinHashes(hashes))
+	_, err := c.doPostValues("/api/v2/torrents/pause", data)
+	if err != nil {
+		return fmt.Errorf("TorrentsPause error: %v", err)
+	}
+	return nil
+}
+
+// TorrentsResume resumes the specified torrents
+func (c *Client) TorrentsResume(hashes []string) error {
+	data := url.Values{}
+	data.Set("hashes", joinHashes(hashes))
+	_, err := c.doPostValues("/api/v2/torrents/resume", data)
+	if err != nil {
+		return fmt.Errorf("TorrentsResume error: %v", err)
+	}
+	return nil
+}
+
+// TorrentsSetLocation sets the save location for the specified torrents
+func (c *Client) TorrentsSetLocation(hashes []string, location string) error {
+	data := url.Values{}
+	data.Set("hashes", joinHashes(hashes))
+	data.Set("location", location)
+	_, err := c.doPostValues("/api/v2/torrents/setLocation", data)
+	if err != nil {
+		return fmt.Errorf("TorrentsSetLocation error: %v", err)
+	}
+	return nil
+}
+
+// TorrentsRecheck rechecks the specified torrents
+func (c *Client) TorrentsRecheck(hashes []string) error {
+	data := url.Values{}
+	data.Set("hashes", joinHashes(hashes))
+	_, err := c.doPostValues("/api/v2/torrents/recheck", data)
+	if err != nil {
+		return fmt.Errorf("TorrentsRecheck error: %v", err)
+	}
+	return nil
+}
+
+// TorrentsReannounce reannounces the specified torrents
+func (c *Client) TorrentsReannounce(hashes []string) error {
+	data := url.Values{}
+	data.Set("hashes", joinHashes(hashes))
+	_, err := c.doPostValues("/api/v2/torrents/reannounce", data)
+	if err != nil {
+		return fmt.Errorf("TorrentsReannounce error: %v", err)
+	}
+	return nil
+}
+
+// TorrentsSetCategory sets the category for the specified torrents
+func (c *Client) TorrentsSetCategory(hashes []string, category string) error {
+	data := url.Values{}
+	data.Set("hashes", joinHashes(hashes))
+	data.Set("category", category)
+	_, err := c.doPostValues("/api/v2/torrents/setCategory", data)
+	if err != nil {
+		return fmt.Errorf("TorrentsSetCategory error: %v", err)
+	}
+	return nil
+}
+
+// TorrentsSetAutoTMM enables or disables Automatic Torrent Management for the specified torrents
+func (c *Client) TorrentsSetAutoTMM(hashes []string, enable bool) error {
+	data := url.Values{}
+	data.Set("hashes", joinHashes(hashes))
+	data.Set("enable", fmt.Sprintf("%t", enable))
+	_, err := c.doPostValues("/api/v2/torrents/setAutoManagement", data)
+	if err != nil {
+		return fmt.Errorf("TorrentsSetAutoTMM error: %v", err)
+	}
+	return nil
+}
+
+// TorrentsRename renames a torrent
+func (c *Client) TorrentsRename(hash string, name string) error {
+	data := url.Values{}
+	data.Set("hash", hash)
+	data.Set("name", name)
+	_, err := c.doPostValues("/api/v2/torrents/rename", data)
+	if err != nil {
+		return fmt.Errorf("TorrentsRename error: %v", err)
+	}
+	return nil
+}
+
+// --- Per-torrent limits ---
+
+// TorrentsSetDownloadLimit sets the download speed limit for the specified torrents (bytes/second)
+func (c *Client) TorrentsSetDownloadLimit(hashes []string, limit int) error {
+	data := url.Values{}
+	data.Set("hashes", joinHashes(hashes))
+	data.Set("limit", strconv.Itoa(limit))
+	_, err := c.doPostValues("/api/v2/torrents/setDownloadLimit", data)
+	if err != nil {
+		return fmt.Errorf("TorrentsSetDownloadLimit error: %v", err)
+	}
+	return nil
+}
+
+// TorrentsSetUploadLimit sets the upload speed limit for the specified torrents (bytes/second)
+func (c *Client) TorrentsSetUploadLimit(hashes []string, limit int) error {
+	data := url.Values{}
+	data.Set("hashes", joinHashes(hashes))
+	data.Set("limit", strconv.Itoa(limit))
+	_, err := c.doPostValues("/api/v2/torrents/setUploadLimit", data)
+	if err != nil {
+		return fmt.Errorf("TorrentsSetUploadLimit error: %v", err)
+	}
+	return nil
+}
+
+// TorrentsSetShareLimits sets share limits for the specified torrents
+func (c *Client) TorrentsSetShareLimits(hashes []string, ratioLimit float64, seedingTimeLimit, inactiveSeedingTimeLimit int) error {
+	data := url.Values{}
+	data.Set("hashes", joinHashes(hashes))
+	data.Set("ratioLimit", fmt.Sprintf("%.2f", ratioLimit))
+	data.Set("seedingTimeLimit", strconv.Itoa(seedingTimeLimit))
+	data.Set("inactiveSeedingTimeLimit", strconv.Itoa(inactiveSeedingTimeLimit))
+	_, err := c.doPostValues("/api/v2/torrents/setShareLimits", data)
+	if err != nil {
+		return fmt.Errorf("TorrentsSetShareLimits error: %v", err)
+	}
+	return nil
+}
+
+// --- Torrent files ---
+
+// TorrentFile represents a file within a torrent
+type TorrentFile struct {
+	Index        int     `json:"index"`
+	Name         string  `json:"name"`
+	Size         int64   `json:"size"`
+	Progress     float64 `json:"progress"`
+	Priority     int     `json:"priority"`
+	IsSeed       bool    `json:"is_seed"`
+	PieceRange   []int   `json:"piece_range"`
+	Availability float64 `json:"availability"`
+}
+
+// TorrentsFiles retrieves the files for a given torrent hash
+func (c *Client) TorrentsFiles(hash string) ([]TorrentFile, error) {
+	params := url.Values{}
+	params.Set("hash", hash)
+	data, err := c.doGet("/api/v2/torrents/files", params)
+	if err != nil {
+		return nil, fmt.Errorf("TorrentsFiles error: %v", err)
+	}
+	var files []TorrentFile
+	if err := json.Unmarshal(data, &files); err != nil {
+		return nil, fmt.Errorf("failed to decode files response: %v", err)
+	}
+	return files, nil
+}
+
+// TorrentsFilePrio sets the priority for specific files within a torrent
+func (c *Client) TorrentsFilePrio(hash string, ids []int, priority int) error {
+	idStrs := make([]string, len(ids))
+	for i, id := range ids {
+		idStrs[i] = strconv.Itoa(id)
+	}
+	data := url.Values{}
+	data.Set("hash", hash)
+	data.Set("id", strings.Join(idStrs, "|"))
+	data.Set("priority", strconv.Itoa(priority))
+	_, err := c.doPostValues("/api/v2/torrents/filePrio", data)
+	if err != nil {
+		return fmt.Errorf("TorrentsFilePrio error: %v", err)
+	}
+	return nil
+}
+
+// --- Category CRUD ---
+
+// TorrentsCategories retrieves all categories
+func (c *Client) TorrentsCategories() (map[string]Category, error) {
+	data, err := c.doGet("/api/v2/torrents/categories", nil)
+	if err != nil {
+		return nil, fmt.Errorf("TorrentsCategories error: %v", err)
+	}
+	var categories map[string]Category
+	if err := json.Unmarshal(data, &categories); err != nil {
+		return nil, fmt.Errorf("failed to decode categories response: %v", err)
+	}
+	return categories, nil
+}
+
+// TorrentsCreateCategory creates a new category
+func (c *Client) TorrentsCreateCategory(name, savePath string) error {
+	data := url.Values{}
+	data.Set("category", name)
+	data.Set("savePath", savePath)
+	_, err := c.doPostValues("/api/v2/torrents/createCategory", data)
+	if err != nil {
+		return fmt.Errorf("TorrentsCreateCategory error: %v", err)
+	}
+	return nil
+}
+
+// TorrentsEditCategory edits an existing category
+func (c *Client) TorrentsEditCategory(name, savePath string) error {
+	data := url.Values{}
+	data.Set("category", name)
+	data.Set("savePath", savePath)
+	_, err := c.doPostValues("/api/v2/torrents/editCategory", data)
+	if err != nil {
+		return fmt.Errorf("TorrentsEditCategory error: %v", err)
+	}
+	return nil
+}
+
+// TorrentsRemoveCategories removes the specified categories
+func (c *Client) TorrentsRemoveCategories(categories []string) error {
+	data := url.Values{}
+	data.Set("categories", strings.Join(categories, "\n"))
+	_, err := c.doPostValues("/api/v2/torrents/removeCategories", data)
+	if err != nil {
+		return fmt.Errorf("TorrentsRemoveCategories error: %v", err)
+	}
+	return nil
 }

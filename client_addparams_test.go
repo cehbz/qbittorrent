@@ -65,14 +65,14 @@ func TestTorrentsAddParams(t *testing.T) {
 				Category:    "tv",
 				Tags:        "hd,x265",
 				SkipCheck:   true,
-				Paused:      true,
+				Paused:      boolPtr(true),
 				RootFolder:  boolPtr(false),
 				Rename:      "renamed_torrent",
 				UpLimit:     1048576, // 1MB/s
 				DlLimit:     2097152, // 2MB/s
 				RatioLimit:  2.5,
 				SeedingTime: 1440, // 24 hours
-				AutoTMM:     true,
+				AutoTMM:     boolPtr(true),
 				Sequential:  true,
 				FirstLast:   true,
 			},
@@ -296,7 +296,7 @@ func TestTorrentsAddParams_BackwardCompatibility(t *testing.T) {
 		t.Fatalf("Expected no error, got %v", err)
 	}
 
-	err = client.TorrentsAdd("test.torrent", torrentData)
+	err = client.TorrentsAdd(torrentData)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -305,11 +305,6 @@ func TestTorrentsAddParams_BackwardCompatibility(t *testing.T) {
 	if mockTransport.requestIndex != len(mockTransport.expectedRequests) {
 		t.Errorf("Not all expected requests were made")
 	}
-}
-
-// Helper function to create bool pointers
-func boolPtr(b bool) *bool {
-	return &b
 }
 
 func TestTorrentsAddParams_EmptyParams(t *testing.T) {
