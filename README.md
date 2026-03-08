@@ -91,7 +91,7 @@ if err != nil {
 }
 ```
 
-### Pause, Resume, Recheck, Reannounce
+### Pause (Stop), Resume (Start), Recheck, Reannounce
 
 ```go
 client.TorrentsPause([]string{"hash1", "hash2"})

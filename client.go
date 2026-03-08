@@ -1010,22 +1010,24 @@ func (c *Client) TransferGetInfo() (*TransferInfo, error) {
 
 // --- Torrent actions (critical) ---
 
-// TorrentsPause pauses the specified torrents
+// TorrentsPause pauses the specified torrents.
+// Uses /torrents/stop (qBittorrent v5.0+); the pre-v5 /torrents/pause endpoint is removed.
 func (c *Client) TorrentsPause(hashes []string) error {
 	data := url.Values{}
 	data.Set("hashes", joinHashes(hashes))
-	_, err := c.doPostValues("/api/v2/torrents/pause", data)
+	_, err := c.doPostValues("/api/v2/torrents/stop", data)
 	if err != nil {
 		return fmt.Errorf("TorrentsPause error: %v", err)
 	}
 	return nil
 }
 
-// TorrentsResume resumes the specified torrents
+// TorrentsResume resumes the specified torrents.
+// Uses /torrents/start (qBittorrent v5.0+); the pre-v5 /torrents/resume endpoint is removed.
 func (c *Client) TorrentsResume(hashes []string) error {
 	data := url.Values{}
 	data.Set("hashes", joinHashes(hashes))
-	_, err := c.doPostValues("/api/v2/torrents/resume", data)
+	_, err := c.doPostValues("/api/v2/torrents/start", data)
 	if err != nil {
 		return fmt.Errorf("TorrentsResume error: %v", err)
 	}

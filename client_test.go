@@ -315,12 +315,12 @@ func TestCookieJar_LogoutClearsCookies(t *testing.T) {
 
 func TestTorrentsPause(t *testing.T) {
 	endpointResponses := map[string]mockResponse{
-		"/api/v2/auth/login":     {statusCode: http.StatusOK, responseBody: "Ok."},
-		"/api/v2/torrents/pause": {statusCode: http.StatusOK, responseBody: "Ok."},
+		"/api/v2/auth/login":    {statusCode: http.StatusOK, responseBody: "Ok."},
+		"/api/v2/torrents/stop": {statusCode: http.StatusOK, responseBody: "Ok."},
 	}
 	expectedRequests := []expectedRequest{
 		{method: "POST", url: "/api/v2/auth/login"},
-		{method: "POST", url: "/api/v2/torrents/pause"},
+		{method: "POST", url: "/api/v2/torrents/stop"},
 	}
 
 	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
@@ -340,12 +340,12 @@ func TestTorrentsPause(t *testing.T) {
 
 func TestTorrentsResume(t *testing.T) {
 	endpointResponses := map[string]mockResponse{
-		"/api/v2/auth/login":      {statusCode: http.StatusOK, responseBody: "Ok."},
-		"/api/v2/torrents/resume": {statusCode: http.StatusOK, responseBody: "Ok."},
+		"/api/v2/auth/login":     {statusCode: http.StatusOK, responseBody: "Ok."},
+		"/api/v2/torrents/start": {statusCode: http.StatusOK, responseBody: "Ok."},
 	}
 	expectedRequests := []expectedRequest{
 		{method: "POST", url: "/api/v2/auth/login"},
-		{method: "POST", url: "/api/v2/torrents/resume"},
+		{method: "POST", url: "/api/v2/torrents/start"},
 	}
 
 	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
