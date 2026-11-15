@@ -16,7 +16,7 @@ func TestTransferGetInfo(t *testing.T) {
 		{method: "GET", url: "/api/v2/transfer/info"},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}

@@ -17,7 +17,7 @@ func TestNoContentIsSuccess(t *testing.T) {
 		{"stop 404", http.StatusNotFound, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			client, _, err := newMockClient(map[string]mockResponse{
+			client, _, err := newMockClient(t, map[string]mockResponse{
 				"/api/v2/auth/login":    {statusCode: http.StatusOK, responseBody: "Ok."},
 				"/api/v2/torrents/stop": {statusCode: c.status},
 			}, []expectedRequest{
@@ -35,7 +35,7 @@ func TestNoContentIsSuccess(t *testing.T) {
 }
 
 func TestLoginNoContent(t *testing.T) {
-	_, _, err := newMockClient(map[string]mockResponse{
+	_, _, err := newMockClient(t, map[string]mockResponse{
 		"/api/v2/auth/login": {statusCode: http.StatusNoContent},
 	}, []expectedRequest{{method: "POST", url: "/api/v2/auth/login"}})
 	if err != nil {
@@ -44,7 +44,7 @@ func TestLoginNoContent(t *testing.T) {
 }
 
 func TestGetNoContent(t *testing.T) {
-	client, _, err := newMockClient(map[string]mockResponse{
+	client, _, err := newMockClient(t, map[string]mockResponse{
 		"/api/v2/auth/login":  {statusCode: http.StatusOK, responseBody: "Ok."},
 		"/api/v2/app/version": {statusCode: http.StatusNoContent},
 	}, []expectedRequest{

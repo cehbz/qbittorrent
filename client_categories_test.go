@@ -16,7 +16,7 @@ func TestTorrentsCategories(t *testing.T) {
 		{method: "GET", url: "/api/v2/torrents/categories"},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -56,7 +56,7 @@ func TestTorrentsCreateCategory(t *testing.T) {
 		{method: "POST", url: "/api/v2/torrents/createCategory"},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -81,7 +81,7 @@ func TestTorrentsEditCategory(t *testing.T) {
 		{method: "POST", url: "/api/v2/torrents/editCategory"},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -106,7 +106,7 @@ func TestTorrentsRemoveCategories(t *testing.T) {
 		{method: "POST", url: "/api/v2/torrents/removeCategories"},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}

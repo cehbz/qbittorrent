@@ -15,7 +15,7 @@ type mockRoundTripper struct {
 	responses        map[string]mockResponse
 	expectedRequests []expectedRequest
 	requestIndex     int
-	t                *testing.T
+	t                testing.TB
 	customHandler    map[string]func(*http.Request)
 }
 
@@ -88,16 +88,16 @@ func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 }
 
 // helper function to create a mock client with predefined endpoint responses and expected requests
-func newMockClient(responses map[string]mockResponse, expectedRequests []expectedRequest) (*Client, *mockRoundTripper, error) {
-	return newMockClientWithHandler(responses, expectedRequests, nil)
+func newMockClient(t testing.TB, responses map[string]mockResponse, expectedRequests []expectedRequest) (*Client, *mockRoundTripper, error) {
+	return newMockClientWithHandler(t, responses, expectedRequests, nil)
 }
 
 // helper function to create a mock client with predefined endpoint responses, expected requests, and custom handlers
-func newMockClientWithHandler(responses map[string]mockResponse, expectedRequests []expectedRequest, customHandler map[string]func(*http.Request)) (*Client, *mockRoundTripper, error) {
+func newMockClientWithHandler(t testing.TB, responses map[string]mockResponse, expectedRequests []expectedRequest, customHandler map[string]func(*http.Request)) (*Client, *mockRoundTripper, error) {
 	transport := &mockRoundTripper{
 		responses:        responses,
 		expectedRequests: expectedRequests,
-		t:                &testing.T{},
+		t:                t,
 		customHandler:    customHandler,
 	}
 

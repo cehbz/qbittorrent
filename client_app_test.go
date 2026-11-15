@@ -15,7 +15,7 @@ func TestAppVersion(t *testing.T) {
 		{method: "GET", url: "/api/v2/app/version"},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -44,7 +44,7 @@ func TestAppDefaultSavePath(t *testing.T) {
 		{method: "GET", url: "/api/v2/app/defaultSavePath"},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -74,7 +74,7 @@ func TestAppPreferences(t *testing.T) {
 		{method: "GET", url: "/api/v2/app/preferences"},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -103,7 +103,7 @@ func TestSetAppPreferences(t *testing.T) {
 		{method: "POST", url: "/api/v2/app/setPreferences"},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -129,7 +129,7 @@ func TestAuthLogout(t *testing.T) {
 		{method: "POST", url: "/api/v2/auth/logout"},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}

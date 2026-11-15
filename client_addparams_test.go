@@ -233,8 +233,8 @@ func TestTorrentsAddParams(t *testing.T) {
 			checkRequest: func(t *testing.T, req *http.Request) {
 				// Request is valid, but server returns error
 			},
-			responseStatus: http.StatusForbidden,
-			responseBody:   "Forbidden",
+			responseStatus: http.StatusUnsupportedMediaType,
+			responseBody:   "Fails.",
 			wantErr:        true,
 		},
 	}
@@ -259,7 +259,7 @@ func TestTorrentsAddParams(t *testing.T) {
 				},
 			}
 
-			client, mockTransport, err := newMockClientWithHandler(endpointResponses, expectedRequests, customHandler)
+			client, mockTransport, err := newMockClientWithHandler(t, endpointResponses, expectedRequests, customHandler)
 			if err != nil {
 				t.Fatalf("Failed to create client: %v", err)
 			}
@@ -291,7 +291,7 @@ func TestTorrentsAddParams_BackwardCompatibility(t *testing.T) {
 		{method: "POST", url: "/api/v2/torrents/add"},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -320,7 +320,7 @@ func TestTorrentsAddParams_EmptyParams(t *testing.T) {
 		{method: "POST", url: "/api/v2/torrents/add"},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}

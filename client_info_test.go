@@ -21,7 +21,7 @@ func TestTorrentsInfo(t *testing.T) {
 		{method: "GET", url: "/api/v2/torrents/info"},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -50,7 +50,7 @@ func TestTorrentsInfo(t *testing.T) {
 		{method: "POST", url: "/api/v2/auth/login"},
 		{method: "GET", url: "/api/v2/torrents/info"},
 	}
-	client, mockTransport, err = newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err = newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -113,7 +113,7 @@ func TestTorrentsInfo_HashesNil(t *testing.T) {
 		{method: "GET", url: "/api/v2/torrents/info"},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -150,7 +150,7 @@ func TestTorrentsInfo_HashesEmpty(t *testing.T) {
 		{method: "GET", url: "/api/v2/torrents/info"},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -184,10 +184,10 @@ func TestTorrentsInfo_HashesSingle(t *testing.T) {
 	}
 	expectedRequests := []expectedRequest{
 		{method: "POST", url: "/api/v2/auth/login"},
-		{method: "GET", url: "/api/v2/torrents/info", params: url.Values{"hashes": []string{"hash1"}}},
+		{method: "GET", url: "/api/v2/torrents/info", query: url.Values{"hashes": []string{"hash1"}}},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -224,10 +224,10 @@ func TestTorrentsInfo_HashesMultiple(t *testing.T) {
 	}
 	expectedRequests := []expectedRequest{
 		{method: "POST", url: "/api/v2/auth/login"},
-		{method: "GET", url: "/api/v2/torrents/info", params: url.Values{"hashes": []string{"hash1|hash2"}}},
+		{method: "GET", url: "/api/v2/torrents/info", query: url.Values{"hashes": []string{"hash1|hash2"}}},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}

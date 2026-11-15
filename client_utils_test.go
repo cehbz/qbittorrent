@@ -19,7 +19,7 @@ func TestDoPostValues(t *testing.T) {
 		{method: "POST", url: "/api/test", params: url.Values{"key": []string{"value"}}},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -53,7 +53,7 @@ func TestDoPost_Error(t *testing.T) {
 		{method: "POST", url: "/api/test"},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -81,7 +81,7 @@ func TestDoGet(t *testing.T) {
 		{method: "GET", url: "/api/test"},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -112,7 +112,7 @@ func TestDoGet_Error(t *testing.T) {
 		{method: "GET", url: "/api/test"},
 	}
 
-	client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+	client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -219,7 +219,7 @@ func TestDoRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client, mockTransport, err := newMockClient(tt.endpointResponses, tt.expectedRequests)
+			client, mockTransport, err := newMockClient(t, tt.endpointResponses, tt.expectedRequests)
 			if err != nil {
 				t.Fatalf("Failed to create mock client: %v", err)
 			}

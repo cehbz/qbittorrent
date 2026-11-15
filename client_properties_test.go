@@ -56,7 +56,7 @@ func TestTorrentsProperties(t *testing.T) {
 				},
 			}
 
-			client, mockTransport, err := newMockClient(endpointResponses, expectedRequests)
+			client, mockTransport, err := newMockClient(t, endpointResponses, expectedRequests)
 			if err != nil {
 				t.Fatalf("Expected no error, got %v", err)
 			}
