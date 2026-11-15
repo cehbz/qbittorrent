@@ -393,7 +393,7 @@ func (c *Client) AuthLogin() error {
 	resp, err := c.doPostResponse("/api/v2/auth/login", strings.NewReader(data.Encode()), "application/x-www-form-urlencoded")
 	if err != nil {
 		return fmt.Errorf("AuthLogin error: %v", err)
-	} else if resp.StatusCode != http.StatusOK {
+	} else if !succeeded(resp) {
 		respBody, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("AuthLogin error (%d): %s", resp.StatusCode, string(respBody))
 	}
@@ -754,6 +754,12 @@ func (c *Client) TorrentsDeleteTags(tags string) error {
 	return nil
 }
 
+// succeeded reports a 2xx status: qBittorrent 5.2 answers 204 No Content
+// to a call that returns no data.
+func succeeded(resp *http.Response) bool {
+	return resp.StatusCode >= 200 && resp.StatusCode < 300
+}
+
 // doPostResponse POSTs to qBittorrent and returns the HTTP response
 func (c *Client) doPostResponse(endpoint string, body io.Reader, contentType string) (*http.Response, error) {
 	return c.doRequest("POST", endpoint, body, contentType)
@@ -769,7 +775,7 @@ func (c *Client) doPost(endpoint string, body io.Reader, contentType string) ([]
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
-	} else if resp.StatusCode != http.StatusOK {
+	} else if !succeeded(resp) {
 		return nil, fmt.Errorf("POST error (%d): %s", resp.StatusCode, string(respBody))
 	}
 	return respBody, nil
@@ -788,7 +794,7 @@ func (c *Client) doGet(endpoint string, query url.Values) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if !succeeded(resp) {
 		respBody, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("unexpected response code: %d, response: %s", resp.StatusCode, string(respBody))
 	}
